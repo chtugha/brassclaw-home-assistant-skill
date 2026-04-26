@@ -22,3 +22,5 @@ strip = true
 codegen-units = 1
 
 [workspace]
+# Standalone crate — empty workspace block prevents a parent Cargo
+# workspace from absorbing this crate during `ironclaw tool install <path>`.

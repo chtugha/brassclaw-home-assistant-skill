@@ -3,6 +3,22 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum StringOrVec {
+    Single(String),
+    Many(Vec<String>),
+}
+
+impl StringOrVec {
+    pub fn as_vec(&self) -> Vec<&str> {
+        match self {
+            StringOrVec::Single(s) => vec![s.as_str()],
+            StringOrVec::Many(v) => v.iter().map(String::as_str).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum HaAction {
     GetStatus {
@@ -12,9 +28,11 @@ pub enum HaAction {
     GetStates {
         ha_url: String,
         #[serde(default)]
-        domain_filter: Option<String>,
+        domain_filter: Option<StringOrVec>,
         #[serde(default)]
         max_items: Option<u32>,
+        #[serde(default)]
+        compact: Option<bool>,
     },
 
     GetState {
@@ -28,6 +46,11 @@ pub enum HaAction {
         state: String,
         #[serde(default)]
         attributes: Option<serde_json::Value>,
+    },
+
+    DeleteState {
+        ha_url: String,
+        entity_id: String,
     },
 
     CallService {
@@ -52,6 +75,10 @@ pub enum HaAction {
     RenderTemplate {
         ha_url: String,
         template: String,
+        #[serde(default)]
+        variables: Option<serde_json::Value>,
+        #[serde(default)]
+        max_chars: Option<u32>,
     },
 
     GetHistory {
@@ -61,6 +88,8 @@ pub enum HaAction {
         hours_back: u32,
         #[serde(default)]
         start_time: Option<String>,
+        #[serde(default)]
+        end_time: Option<String>,
     },
 
     GetLogbook {
@@ -69,6 +98,10 @@ pub enum HaAction {
         entity_id: Option<String>,
         #[serde(default = "default_hours_back")]
         hours_back: u32,
+        #[serde(default)]
+        start_time: Option<String>,
+        #[serde(default)]
+        end_time: Option<String>,
     },
 
     GetCalendarEvents {
@@ -237,11 +270,20 @@ fn default_enabled() -> bool {
     true
 }
 
+/// Response for `get_states`. `matched` is the filtered count (after
+/// `domain_filter`); `total` is the full unfiltered entity count reported
+/// by Home Assistant. `count` is the number actually returned (may be
+/// less than `matched` if `max_items`/hard cap truncated the list).
 #[derive(Debug, Serialize)]
 pub struct StatesResponse {
     pub entities: Vec<serde_json::Value>,
     pub count: usize,
+    pub matched: usize,
     pub total: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub truncated: Option<bool>,
+    /// "user" when truncated by caller-supplied `max_items`,
+    /// "hard" when truncated by the server-side safety cap.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cap_kind: Option<&'static str>,
 }

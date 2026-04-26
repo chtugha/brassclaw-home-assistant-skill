@@ -59,12 +59,17 @@ Every ha-tool call requires `ha_url` — the base URL of the user's HA instance 
 ### Discovery
 - `get_status` — Check if HA is reachable
 - `get_config` — Get HA configuration (version, location, units)
-- `get_states` — List all entities (use `domain_filter` to narrow: `light`, `switch`, `sensor`, `climate`, etc.; optional `max_items` caps the returned list for small context budgets)
+- `get_states` — List all entities. Parameters:
+  - `domain_filter` — single domain (`"light"`) or array (`["light","switch","sensor"]`) to union-match
+  - `max_items` — caps the returned list for small context budgets
+  - `compact: true` — projects each entity to `{entity_id, state, last_changed?}`, dropping the full attribute map (huge token savings during discovery; fall back to `get_state` when you need attributes)
+  - Response: `{entities, count, matched, total, truncated?, cap_kind?}` where `matched` is the post-filter count, `total` is the unfiltered HA total, and `cap_kind` is `"user"` or `"hard"` when truncated
 - `get_services` — List all available service domains and their services
 
 ### Entity Control
 - `get_state` — Get current state of a specific entity
-- `set_state` — Set entity state directly (with optional attributes)
+- `set_state` — Set entity state directly (`attributes` must be a JSON object if provided)
+- `delete_state` — Remove a manually-created state (HA `DELETE /api/states/{entity_id}`)
 - `call_service` — Call any HA service (most flexible action)
 
 ### Automations
@@ -83,11 +88,11 @@ Every ha-tool call requires `ha_url` — the base URL of the user's HA instance 
 - `modbus_write` — Write to Modbus coils (boolean) or holding registers (number)
 
 ### Templates
-- `render_template` — Render a Jinja2 template on the HA server
+- `render_template` — Render a Jinja2 template on the HA server. Optional `variables` (object) is forwarded to HA. Output is capped (default 8 KiB, hard ceiling 16 KiB); raise via `max_chars`. When truncated, the response ends with `…[truncated, N more bytes — pass `max_chars` to widen]`.
 
 ### History & Logs
-- `get_history` — Entity state history (default 24h, or pass `start_time` in ISO 8601)
-- `get_logbook` — Event logbook (optional entity filter)
+- `get_history` — Entity state history. Bound the window with `start_time` and/or `end_time` (ISO 8601). When neither is provided, falls back to `hours_back` (default 24, max 8760).
+- `get_logbook` — Event logbook. Same time-window options as `get_history`; optional `entity_id` filter.
 - `get_calendar_events` — Calendar events (requires `start` and `end` in ISO 8601)
 
 ### Events
@@ -116,6 +121,8 @@ If your HA instance has the [MCP Server integration](https://www.home-assistant.
 ## Shell-Backed Actions (optional, via `remote-shell` extension)
 
 If the user has installed the `ironclaw-remote-shell-extension`, `ha-tool` can perform operations that the REST API cannot (YAML editing, real log tailing, `ha` supervisor CLI). Pass an `ssh` object to any shell-aware action. If the remote-shell extension is not installed or the shell call fails, `ha-tool` logs a warning and falls back to the REST API automatically.
+
+> **Heads-up — silent shell→REST fallback.** When `check_config` or `get_error_log` is called with `ssh` and the shell path fails (bad credentials, gateway not running, transient network error), the tool currently logs a warning at level `Warn` and silently routes the call to the REST API. The user-visible response is the REST result with no fallback marker. If you suspect a fallback happened (the response shape doesn't match the shell-backed expectation), check the host log and call `shell_status` to verify gateway availability. `restart_ha` is the exception: it uses a *strict* shell path that surfaces shell errors instead of silently falling back to REST.
 
 ### SshConfig schema
 ```json
@@ -161,7 +168,8 @@ If the user has installed the `ironclaw-remote-shell-extension`, `ha-tool` can p
 
 ## Workflow Tips
 
-1. **Start with discovery**: Use `get_states` with domain_filter to find entity IDs before operating on them.
+0. **On a fresh session that intends to use shell-aware actions**, call `shell_status` once and cache the result — it tells you whether `ssh`-backed paths will actually be taken (vs silently falling back to REST).
+1. **Start with discovery**: Use `get_states` with domain_filter (single string or array) and `compact: true` to find entity IDs cheaply before operating on them.
 2. **Use call_service for anything**: Any HA service can be called directly — lights, climate, media, covers, locks, etc.
 3. **MQTT and Modbus**: These use HA's integration services, so HA must have the MQTT/Modbus integrations configured.
 4. **Templates**: Use `render_template` to evaluate complex conditions or calculations on the HA server.

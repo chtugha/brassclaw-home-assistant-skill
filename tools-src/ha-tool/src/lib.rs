@@ -2,12 +2,22 @@ mod api;
 mod shell;
 mod types;
 
+use std::sync::OnceLock;
 use types::HaAction;
 
 wit_bindgen::generate!({
     world: "sandboxed-tool",
     path: "../../wit/tool.wit",
 });
+
+static SCHEMA_CACHE: OnceLock<String> = OnceLock::new();
+
+const TOOL_DESCRIPTION: &str = "Control Home Assistant via REST API: states, services, \
+events, automations, scripts, scenes, MQTT, Modbus, templates, history, logs, calendars, \
+notifications, and reloads. `ha_url` (private/local URL) is required on every call. \
+Optional `ssh` on `check_config`, `get_error_log`, and `restart_ha` enables shell-backed \
+mode via the remote-shell extension. See the schema for per-action parameters; use \
+`get_states` with `compact: true` for cheap discovery.";
 
 struct HaTool;
 
@@ -26,18 +36,16 @@ impl exports::near::agent::tool::Guest for HaTool {
     }
 
     fn schema() -> String {
-        let schema = schemars::schema_for!(types::HaAction);
-        serde_json::to_string(&schema).expect("schema serialization is infallible")
+        SCHEMA_CACHE
+            .get_or_init(|| {
+                let schema = schemars::schema_for!(types::HaAction);
+                serde_json::to_string(&schema).expect("schema serialization is infallible")
+            })
+            .clone()
     }
 
     fn description() -> String {
-        "Home Assistant integration tool. Control lights, switches, climate, media players, \
-         automations, scripts, scenes, MQTT, Modbus, templates, history, logbook, calendar, \
-         notifications, reloads (core_config, automations, scripts, scenes, themes, \
-         config_entry), and system management (check_config, error_log, restart) via the HA \
-         REST API. Requires ha_token (configure with `ironclaw tool auth ha-tool`). \
-         Every call requires ha_url parameter with the HA instance base URL."
-            .to_string()
+        TOOL_DESCRIPTION.to_string()
     }
 }
 
@@ -58,13 +66,15 @@ fn execute_inner(params: &str) -> Result<String, String> {
 
     match action {
         HaAction::GetStatus { ha_url } => api::get_status(&ha_url),
-        HaAction::GetStates { ha_url, domain_filter, max_items } => {
-            api::get_states(&ha_url, domain_filter.as_deref(), max_items)
+        HaAction::GetStates { ha_url, domain_filter, max_items, compact } => {
+            let domains = domain_filter.as_ref().map(|f| f.as_vec());
+            api::get_states(&ha_url, domains.as_deref(), max_items, compact.unwrap_or(false))
         }
         HaAction::GetState { ha_url, entity_id } => api::get_state(&ha_url, &entity_id),
         HaAction::SetState { ha_url, entity_id, state, attributes } => {
             api::set_state(&ha_url, &entity_id, &state, attributes.as_ref())
         }
+        HaAction::DeleteState { ha_url, entity_id } => api::delete_state(&ha_url, &entity_id),
         HaAction::CallService { ha_url, domain, service, data } => {
             api::call_service(&ha_url, &domain, &service, data.as_ref())
         }
@@ -72,20 +82,32 @@ fn execute_inner(params: &str) -> Result<String, String> {
         HaAction::FireEvent { ha_url, event_type, event_data } => {
             api::fire_event(&ha_url, &event_type, event_data.as_ref())
         }
-        HaAction::RenderTemplate { ha_url, template } => {
-            api::render_template(&ha_url, &template)
+        HaAction::RenderTemplate { ha_url, template, variables, max_chars } => {
+            api::render_template(&ha_url, &template, variables.as_ref(), max_chars)
         }
-        HaAction::GetHistory { ha_url, entity_id, hours_back, start_time } => {
-            api::get_history(&ha_url, &entity_id, hours_back, start_time.as_deref())
+        HaAction::GetHistory { ha_url, entity_id, hours_back, start_time, end_time } => {
+            api::get_history(
+                &ha_url,
+                &entity_id,
+                hours_back,
+                start_time.as_deref(),
+                end_time.as_deref(),
+            )
         }
-        HaAction::GetLogbook { ha_url, entity_id, hours_back } => {
-            api::get_logbook(&ha_url, entity_id.as_deref(), hours_back)
+        HaAction::GetLogbook { ha_url, entity_id, hours_back, start_time, end_time } => {
+            api::get_logbook(
+                &ha_url,
+                entity_id.as_deref(),
+                hours_back,
+                start_time.as_deref(),
+                end_time.as_deref(),
+            )
         }
         HaAction::GetCalendarEvents { ha_url, entity_id, start, end } => {
             api::get_calendar_events(&ha_url, &entity_id, &start, &end)
         }
         HaAction::ListAutomations { ha_url } => {
-            api::get_states(&ha_url, Some("automation"), None)
+            api::get_states(&ha_url, Some(&["automation"]), None, true)
         }
         HaAction::ToggleAutomation { ha_url, entity_id, enabled } => {
             api::toggle_automation(&ha_url, &entity_id, enabled)
@@ -93,11 +115,11 @@ fn execute_inner(params: &str) -> Result<String, String> {
         HaAction::TriggerAutomation { ha_url, entity_id } => {
             api::trigger_automation(&ha_url, &entity_id)
         }
-        HaAction::ListScripts { ha_url } => api::get_states(&ha_url, Some("script"), None),
+        HaAction::ListScripts { ha_url } => api::get_states(&ha_url, Some(&["script"]), None, true),
         HaAction::RunScript { ha_url, entity_id, variables } => {
             api::run_script(&ha_url, &entity_id, variables.as_ref())
         }
-        HaAction::ListScenes { ha_url } => api::get_states(&ha_url, Some("scene"), None),
+        HaAction::ListScenes { ha_url } => api::get_states(&ha_url, Some(&["scene"]), None, true),
         HaAction::ActivateScene { ha_url, entity_id } => {
             api::activate_scene(&ha_url, &entity_id)
         }

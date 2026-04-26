@@ -187,6 +187,9 @@ pub fn shell_exec(ssh: &SshConfig, command: &str, timeout_secs: Option<u32>) -> 
     if command.len() > MAX_COMMAND_LEN {
         return Err(format!("command too long (max {} bytes)", MAX_COMMAND_LEN));
     }
+    if command.contains('\0') {
+        return Err("command must not contain null bytes".into());
+    }
     let session_id = ensure_session(ssh)?;
     let timeout = timeout_secs
         .unwrap_or(DEFAULT_EXEC_TIMEOUT_SECS)
@@ -244,7 +247,12 @@ fn parse_exec_output(raw: &str) -> Result<(i32, String, String), String> {
             .map_err(|e| format!("invalid exit code '{}': {}", exit_str, e))?
     };
 
-    if rest.is_empty() || rest.trim() == "(no output)" {
+    // Empty body or a body that starts with the "(no output)" sentinel
+    // (possibly followed by gateway-side trailer lines) means no streams.
+    if rest.is_empty()
+        || rest == "(no output)"
+        || rest.starts_with("(no output)\n")
+    {
         return Ok((exit_code, String::new(), String::new()));
     }
 
@@ -517,6 +525,35 @@ mod tests {
         assert_eq!(code, 0);
         assert_eq!(out, "out\n");
         assert_eq!(err, "err\n");
+    }
+
+    #[test]
+    fn test_parse_exec_output_tolerates_trailing_lines_after_no_output() {
+        // F19: a future gateway footer line after `(no output)` should not
+        // break the parser.
+        let raw = "Exit code: 0\n(no output)\nWarning: command exceeded soft limit";
+        let (code, out, err) = parse_exec_output(raw).unwrap();
+        assert_eq!(code, 0);
+        assert_eq!(out, "");
+        assert_eq!(err, "");
+    }
+
+    #[test]
+    fn test_shell_exec_rejects_null_bytes() {
+        let ssh = SshConfig {
+            session_id: Some("x".into()),
+            host: None,
+            port: None,
+            username: None,
+            password: None,
+            private_key_pem: None,
+            host_key_fingerprint: None,
+            insecure_ignore_host_key: None,
+            gateway_port: None,
+        };
+        assert!(shell_exec(&ssh, "echo bad\0byte", None)
+            .unwrap_err()
+            .contains("null bytes"));
     }
 
     #[test]

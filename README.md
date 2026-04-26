@@ -171,6 +171,18 @@ List all climate entities.
 What sensors do I have?
 ```
 
+```
+Give me a compact list of lights, switches, and sensors in one call.
+```
+
+`get_states` accepts a single `domain_filter` (e.g. `"light"`) or an array
+(e.g. `["light","switch","sensor"]`) and a `compact: true` flag that
+projects each entity down to `{entity_id, state, last_changed?}` —
+**use it during discovery to drastically cut token cost**, then call
+`get_state` for the few entities you need full attributes for.
+The response includes `matched` (post-filter count), `total` (full HA
+entity count), and `cap_kind` (`"user"` or `"hard"`) when truncated.
+
 ---
 
 ### Get and set entity state
@@ -182,6 +194,14 @@ What is the current state of sensor.living_room_temperature?
 ```
 Set light.bedroom to state 'on' with brightness 150.
 ```
+
+```
+Delete the manually-created state input_text.test_value.
+```
+
+`delete_state` removes a manually-created state via HA's
+`DELETE /api/states/{entity_id}` endpoint — useful for cleaning up after
+`set_state` experiments.
 
 ---
 
@@ -299,6 +319,11 @@ Render the template: {{ states('sensor.living_room_temperature') }}°C
 Evaluate: {% if states('binary_sensor.door') == 'on' %}Door is open{% else %}Door is closed{% endif %}
 ```
 
+`render_template` accepts optional `variables` (an object forwarded to
+HA) and `max_chars` to widen the default 8 KiB output cap (hard ceiling
+16 KiB). When the rendered output exceeds the cap, the response ends
+with `…[truncated, N more bytes — pass `max_chars` to widen]`.
+
 ---
 
 ### History and logbook
@@ -314,6 +339,15 @@ Show the logbook for automation.irrigation_morning for the last 48 hours.
 ```
 Show history for light.kitchen from 2024-06-01T00:00:00Z.
 ```
+
+```
+Show history for light.kitchen between 2024-06-01T00:00:00Z and 2024-06-02T00:00:00Z.
+```
+
+Both `get_history` and `get_logbook` accept `start_time` and `end_time`
+(ISO 8601). When neither is supplied they fall back to `hours_back`
+(default 24, max 8760). **Always bound the window** to avoid
+unintentionally pulling the full HA history into context.
 
 ---
 
@@ -421,6 +455,30 @@ Home Assistant ships an optional [MCP Server integration](https://www.home-assis
 They are complementary — the REST tool covers administration and maintenance the MCP server doesn't, and the MCP server provides a curated conversational surface that respects HA's Assist exposure settings.
 
 ---
+
+## Token-Efficiency & Agent Tips
+
+Local-LLM users should keep the agent's context tight. The tool ships
+several knobs designed for this:
+
+- **`get_states { compact: true }`** — drops the verbose `attributes`
+  map and timestamps, returning only `entity_id` + `state` per entity.
+  This is the single biggest token saver during discovery.
+- **`get_states { domain_filter: [...] }`** — accepts an array so you
+  can union-fetch multiple domains in a single round-trip instead of
+  three separate calls.
+- **`render_template { max_chars }`** — caps the rendered body
+  (default 8 KiB, hard ceiling 16 KiB) and appends a truncation marker
+  so the agent knows it can ask for more.
+- **`get_history` / `get_logbook` with `start_time` + `end_time`** —
+  bound the time window. Without bounds, HA can return MBs of history.
+- **`shell_status`** — call once per session if you intend to use SSH
+  paths so you don't waste a round-trip per shell-aware action only to
+  fall back to REST.
+- **Silent shell→REST fallback warning.** When `check_config` or
+  `get_error_log` is called with `ssh` and the shell path fails, the
+  tool logs a `Warn` and silently uses REST. `restart_ha` is the
+  exception — it surfaces shell errors instead of falling back.
 
 ## Limitations
 

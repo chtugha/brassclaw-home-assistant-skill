@@ -2,16 +2,19 @@ use crate::near::agent::host;
 use crate::shell::{self, SshConfig};
 use crate::types::StatesResponse;
 
-const MAX_STATES: usize = 500;
+const MAX_STATES: usize = 5000;
 const MAX_HOURS_BACK: u32 = 8760;
 const MAX_ENTITY_ID_LEN: usize = 255;
 const MAX_EVENT_TYPE_LEN: usize = 255;
 const MAX_STATE_LEN: usize = 255;
 const MAX_TEMPLATE_LEN: usize = 65_536;
+const MAX_TEMPLATE_OUT_BYTES: u32 = 16_384;
+const DEFAULT_TEMPLATE_OUT_BYTES: u32 = 8_192;
 const MAX_MQTT_TOPIC_LEN: usize = 65_535;
 const DEFAULT_HA_LOG_PATH: &str = "/config/home-assistant.log";
 const DEFAULT_SHELL_TAIL_LINES: u32 = 200;
 const MS_PER_SECOND: u64 = 1000;
+const SECONDS_PER_MINUTE: u64 = 60;
 const SECONDS_PER_HOUR: u64 = 3600;
 const SECONDS_PER_DAY: u64 = 86400;
 
@@ -43,6 +46,14 @@ fn validate_ha_url(ha_url: &str) -> Result<(), String> {
         lower.strip_prefix("https://").unwrap_or("")
     };
     let host = host_part.split('/').next().unwrap_or("");
+    // Defense-in-depth: explicitly reject userinfo, query, or fragment
+    // characters appearing inside the authority component.
+    if host.contains('@') || host.contains('?') || host.contains('#') {
+        return Err(
+            "ha_url authority must not contain '@', '?', or '#' (no userinfo/query/fragment in host)"
+                .into(),
+        );
+    }
     let host_no_port = host.split(':').next().unwrap_or("");
     if host_no_port.is_empty() {
         return Err("ha_url must contain a hostname".into());
@@ -102,8 +113,30 @@ fn is_private_172(host: &str) -> bool {
     false
 }
 
+/// Normalize an HA base URL: lowercase the scheme + authority (host[:port])
+/// while preserving case-sensitive path bytes, and trim a trailing `/`.
+/// Assumes `validate_ha_url` already accepted the input.
 fn normalize_url(ha_url: &str) -> String {
-    ha_url.trim_end_matches('/').to_string()
+    let trimmed = ha_url.trim_end_matches('/');
+    let (scheme_len, scheme) = if trimmed.len() >= 7
+        && trimmed[..7].eq_ignore_ascii_case("http://")
+    {
+        (7, "http://")
+    } else if trimmed.len() >= 8 && trimmed[..8].eq_ignore_ascii_case("https://") {
+        (8, "https://")
+    } else {
+        return trimmed.to_string();
+    };
+    let after_scheme = &trimmed[scheme_len..];
+    let (authority, path) = match after_scheme.find('/') {
+        Some(i) => (&after_scheme[..i], &after_scheme[i..]),
+        None => (after_scheme, ""),
+    };
+    let mut out = String::with_capacity(trimmed.len());
+    out.push_str(scheme);
+    out.push_str(&authority.to_ascii_lowercase());
+    out.push_str(path);
+    out
 }
 
 fn validate_entity_id(id: &str) -> Result<(), String> {
@@ -160,6 +193,14 @@ fn validate_iso_prefix(s: &str, field: &str) -> Result<(), String> {
     {
         return Err(format!("{} must be ISO 8601 format (YYYY-MM-DDThh:mm:ss)", field));
     }
+    let month = (b[5] - b'0') * 10 + (b[6] - b'0');
+    let day = (b[8] - b'0') * 10 + (b[9] - b'0');
+    if !(1..=12).contains(&month) {
+        return Err(format!("{} month component must be 01-12", field));
+    }
+    if !(1..=31).contains(&day) {
+        return Err(format!("{} day component must be 01-31", field));
+    }
     Ok(())
 }
 
@@ -171,8 +212,8 @@ fn iso_timestamp_hours_ago(hours_back: u32) -> String {
     let d = secs / SECONDS_PER_DAY;
     let rem = secs % SECONDS_PER_DAY;
     let h = rem / SECONDS_PER_HOUR;
-    let m = (rem % SECONDS_PER_HOUR) / 60;
-    let s = rem % 60;
+    let m = (rem % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE;
+    let s = rem % SECONDS_PER_MINUTE;
     let (y, mo, day) = days_to_ymd(d as i64);
     format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, mo, day, h, m, s)
 }
@@ -215,18 +256,67 @@ pub fn get_config(base: &str) -> Result<String, String> {
     ha_get(base, "/api/config")
 }
 
-pub fn get_states(base: &str, domain_filter: Option<&str>, max_items: Option<u32>) -> Result<String, String> {
+/// Project a full HA state object to its discovery-relevant subset:
+/// `{entity_id, state, last_changed?}`. Drops the verbose `attributes`
+/// map and timestamps the agent rarely needs during enumeration.
+fn compact_entity(e: &serde_json::Value) -> serde_json::Value {
+    let entity_id = e.get("entity_id").cloned().unwrap_or(serde_json::Value::Null);
+    let state = e.get("state").cloned().unwrap_or(serde_json::Value::Null);
+    let last_changed = e.get("last_changed").cloned();
+    let mut obj = serde_json::Map::new();
+    obj.insert("entity_id".into(), entity_id);
+    obj.insert("state".into(), state);
+    if let Some(lc) = last_changed {
+        obj.insert("last_changed".into(), lc);
+    }
+    serde_json::Value::Object(obj)
+}
+
+/// Cap a rendered-template body at `cap` UTF-8 bytes, appending a
+/// truncation marker that tells the agent how many bytes were elided
+/// and how to widen the cap. Returns `raw` unchanged when within cap.
+fn truncate_template_output(raw: String, cap: usize) -> String {
+    if raw.len() <= cap {
+        return raw;
+    }
+    let mut end = cap;
+    while end > 0 && !raw.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut out = String::with_capacity(end + 64);
+    out.push_str(&raw[..end]);
+    out.push_str(&format!(
+        "\n…[truncated, {} more bytes — pass `max_chars` to widen]",
+        raw.len() - end
+    ));
+    out
+}
+
+pub fn get_states(
+    base: &str,
+    domain_filter: Option<&[&str]>,
+    max_items: Option<u32>,
+    compact: bool,
+) -> Result<String, String> {
+    // Validate domain filter cheaply *before* the network round-trip so
+    // garbage input fails fast without fetching every HA entity.
+    if let Some(domains) = domain_filter {
+        for d in domains {
+            validate_domain(d)?;
+        }
+    }
     let raw = ha_get(base, "/api/states")?;
     let all: Vec<serde_json::Value> = serde_json::from_str(&raw)
         .map_err(|e| format!("Failed to parse states: {}", e))?;
+    let total_unfiltered = all.len();
 
-    let filtered: Vec<serde_json::Value> = if let Some(domain) = domain_filter {
-        let prefix = format!("{}.", domain);
+    let filtered: Vec<serde_json::Value> = if let Some(domains) = domain_filter {
+        let prefixes: Vec<String> = domains.iter().map(|d| format!("{}.", d)).collect();
         all.into_iter()
             .filter(|e| {
                 e.get("entity_id")
                     .and_then(|v| v.as_str())
-                    .map(|id| id.starts_with(&prefix))
+                    .map(|id| prefixes.iter().any(|p| id.starts_with(p.as_str())))
                     .unwrap_or(false)
             })
             .collect()
@@ -234,23 +324,38 @@ pub fn get_states(base: &str, domain_filter: Option<&str>, max_items: Option<u32
         all
     };
 
-    let total = filtered.len();
-    let cap = match max_items {
+    let matched = filtered.len();
+    let (cap, user_cap) = match max_items {
         Some(0) => return Err("max_items must be >= 1".into()),
-        Some(n) => (n as usize).min(MAX_STATES),
-        None => MAX_STATES,
+        Some(n) => {
+            let user = n as usize;
+            (user.min(MAX_STATES), Some(user))
+        }
+        None => (MAX_STATES, None),
     };
-    let (entities, truncated) = if total > cap {
-        (filtered[..cap].to_vec(), Some(true))
+    let (mut entities, truncated, cap_kind) = if matched > cap {
+        let kind = match user_cap {
+            Some(u) if u <= MAX_STATES => "user",
+            _ => "hard",
+        };
+        (filtered[..cap].to_vec(), Some(true), Some(kind))
     } else {
-        (filtered, None)
+        (filtered, None, None)
     };
+
+    if compact {
+        for e in entities.iter_mut() {
+            *e = compact_entity(e);
+        }
+    }
 
     let resp = StatesResponse {
         count: entities.len(),
-        total,
+        matched,
+        total: total_unfiltered,
         entities,
         truncated,
+        cap_kind,
     };
     serde_json::to_string(&resp).map_err(|e| e.to_string())
 }
@@ -268,10 +373,35 @@ pub fn set_state(base: &str, entity_id: &str, state: &str, attributes: Option<&s
     }
     let mut body = serde_json::json!({"state": state});
     if let Some(attrs) = attributes {
+        if !attrs.is_object() {
+            return Err("attributes must be a JSON object (e.g. {\"unit_of_measurement\": \"°C\"})".into());
+        }
         body["attributes"] = attrs.clone();
     }
     let body_str = serde_json::to_string(&body).map_err(|e| e.to_string())?;
     ha_post(base, &format!("/api/states/{}", url_encode(entity_id)), Some(&body_str))
+}
+
+pub fn delete_state(base: &str, entity_id: &str) -> Result<String, String> {
+    validate_entity_id(entity_id)?;
+    validate_ha_url(base)?;
+    let url = format!("{}/api/states/{}", normalize_url(base), url_encode(entity_id));
+    host::log(host::LogLevel::Debug, &format!("DELETE /api/states/{}", entity_id));
+    let resp = host::http_request("DELETE", &url, "{}", None, None)?;
+    if resp.status < 200 || resp.status >= 300 {
+        return Err(format!(
+            "HA API DELETE /api/states/{} returned {}: {}",
+            entity_id,
+            resp.status,
+            String::from_utf8_lossy(&resp.body)
+        ));
+    }
+    let body = String::from_utf8(resp.body).map_err(|e| format!("Invalid UTF-8: {}", e))?;
+    if body.trim().is_empty() {
+        Ok(serde_json::json!({"deleted": entity_id}).to_string())
+    } else {
+        Ok(body)
+    }
 }
 
 pub fn call_service(base: &str, domain: &str, service: &str, data: Option<&serde_json::Value>) -> Result<String, String> {
@@ -318,17 +448,38 @@ pub fn fire_event(base: &str, event_type: &str, event_data: Option<&serde_json::
     ha_post(base, &path, Some(&body_str))
 }
 
-pub fn render_template(base: &str, template: &str) -> Result<String, String> {
+pub fn render_template(
+    base: &str,
+    template: &str,
+    variables: Option<&serde_json::Value>,
+    max_chars: Option<u32>,
+) -> Result<String, String> {
     validate_not_empty(template, "template")?;
     if template.len() > MAX_TEMPLATE_LEN {
         return Err(format!("template too large (max {} bytes)", MAX_TEMPLATE_LEN));
     }
-    let body = serde_json::json!({"template": template});
+    let mut body = serde_json::json!({"template": template});
+    if let Some(v) = variables {
+        if !v.is_object() {
+            return Err("variables must be a JSON object".into());
+        }
+        body["variables"] = v.clone();
+    }
     let body_str = serde_json::to_string(&body).map_err(|e| e.to_string())?;
-    ha_post(base, "/api/template", Some(&body_str))
+    let raw = ha_post(base, "/api/template", Some(&body_str))?;
+    let cap = max_chars
+        .unwrap_or(DEFAULT_TEMPLATE_OUT_BYTES)
+        .min(MAX_TEMPLATE_OUT_BYTES) as usize;
+    Ok(truncate_template_output(raw, cap))
 }
 
-pub fn get_history(base: &str, entity_id: &str, hours_back: u32, start_time: Option<&str>) -> Result<String, String> {
+pub fn get_history(
+    base: &str,
+    entity_id: &str,
+    hours_back: u32,
+    start_time: Option<&str>,
+    end_time: Option<&str>,
+) -> Result<String, String> {
     validate_entity_id(entity_id)?;
     if start_time.is_none() && (hours_back == 0 || hours_back > MAX_HOURS_BACK) {
         return Err(format!("hours_back must be between 1 and {}", MAX_HOURS_BACK));
@@ -339,21 +490,47 @@ pub fn get_history(base: &str, entity_id: &str, hours_back: u32, start_time: Opt
     } else {
         iso_timestamp_hours_ago(hours_back)
     };
-    let path = format!("/api/history/period/{}?filter_entity_id={}", url_encode(&ts), url_encode(entity_id));
+    let mut path = format!(
+        "/api/history/period/{}?filter_entity_id={}",
+        url_encode(&ts),
+        url_encode(entity_id)
+    );
+    if let Some(et) = end_time {
+        validate_iso_prefix(et, "end_time")?;
+        path.push_str(&format!("&end_time={}", url_encode(et)));
+    }
     ha_get(base, &path)
 }
 
-pub fn get_logbook(base: &str, entity_id: Option<&str>, hours_back: u32) -> Result<String, String> {
+pub fn get_logbook(
+    base: &str,
+    entity_id: Option<&str>,
+    hours_back: u32,
+    start_time: Option<&str>,
+    end_time: Option<&str>,
+) -> Result<String, String> {
     if let Some(eid) = entity_id {
         validate_entity_id(eid)?;
     }
-    if hours_back == 0 || hours_back > MAX_HOURS_BACK {
-        return Err(format!("hours_back must be between 1 and {}", MAX_HOURS_BACK));
-    }
-    let ts = iso_timestamp_hours_ago(hours_back);
+    let ts = if let Some(st) = start_time {
+        validate_iso_prefix(st, "start_time")?;
+        st.to_string()
+    } else {
+        if hours_back == 0 || hours_back > MAX_HOURS_BACK {
+            return Err(format!("hours_back must be between 1 and {}", MAX_HOURS_BACK));
+        }
+        iso_timestamp_hours_ago(hours_back)
+    };
     let mut path = format!("/api/logbook/{}", url_encode(&ts));
+    let mut has_query = false;
     if let Some(eid) = entity_id {
         path.push_str(&format!("?entity={}", url_encode(eid)));
+        has_query = true;
+    }
+    if let Some(et) = end_time {
+        validate_iso_prefix(et, "end_time")?;
+        let sep = if has_query { '&' } else { '?' };
+        path.push_str(&format!("{}end_time={}", sep, url_encode(et)));
     }
     ha_get(base, &path)
 }
@@ -546,6 +723,13 @@ pub fn reload_config_entry(base: &str, entry_id: &str) -> Result<String, String>
     )
 }
 
+/// Convert days-since-Unix-epoch to (year, month, day) in the proleptic
+/// Gregorian calendar. Implements the `civil_from_days` algorithm from
+/// Howard Hinnant's "chrono-Compatible Low-Level Date Algorithms" (2013):
+/// https://howardhinnant.github.io/date_algorithms.html
+/// The integer constants below (719468, 146097, 36524, 1460, 153, …) are
+/// Hinnant's algorithm constants — do NOT replace them with named
+/// constants, they only make sense as a group.
 fn days_to_ymd(days_since_epoch: i64) -> (i64, u32, u32) {
     let z = days_since_epoch + 719468;
     let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
@@ -604,6 +788,16 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_iso_prefix_rejects_invalid_month_day() {
+        assert!(validate_iso_prefix("2024-00-15T10:30:00Z", "test").is_err());
+        assert!(validate_iso_prefix("2024-13-15T10:30:00Z", "test").is_err());
+        assert!(validate_iso_prefix("2024-01-00T10:30:00Z", "test").is_err());
+        assert!(validate_iso_prefix("2024-01-32T10:30:00Z", "test").is_err());
+        assert!(validate_iso_prefix("2024-99-99T10:30:00Z", "test").is_err());
+        assert!(validate_iso_prefix("2024-12-31T10:30:00Z", "test").is_ok());
+    }
+
+    #[test]
     fn test_validate_ha_url() {
         assert!(validate_ha_url("http://192.168.1.100:8123").is_ok());
         assert!(validate_ha_url("http://homeassistant.local:8123").is_ok());
@@ -622,6 +816,23 @@ mod tests {
         assert!(validate_ha_url("http://10.0.0.1.attacker.com").is_err());
         assert!(validate_ha_url("http://172.16.0.1.evil.com").is_err());
         assert!(validate_ha_url("https://https://foo.local").is_err());
+    }
+
+    #[test]
+    fn test_validate_ha_url_rejects_userinfo_query_fragment() {
+        assert!(validate_ha_url("http://attacker.com@192.168.1.1/").is_err());
+        assert!(validate_ha_url("http://192.168.1.1@evil.com/").is_err());
+        assert!(validate_ha_url("http://192.168.1.1?x=1").is_err());
+        assert!(validate_ha_url("http://192.168.1.1#frag").is_err());
+        assert!(validate_ha_url("http://user:pass@192.168.1.1/").is_err());
+    }
+
+    #[test]
+    fn test_normalize_url_lowercases_scheme_and_host() {
+        assert_eq!(normalize_url("HTTP://HA:8123"), "http://ha:8123");
+        assert_eq!(normalize_url("HTTPS://Ha.Local:8123/"), "https://ha.local:8123");
+        // Path case is preserved.
+        assert_eq!(normalize_url("http://HA:8123/API/Foo"), "http://ha:8123/API/Foo");
     }
 
     #[test]
@@ -674,6 +885,62 @@ mod tests {
         assert!(reload_config_entry(base, "bad/id").unwrap_err().contains("invalid character"));
         assert!(reload_config_entry(base, "bad id").unwrap_err().contains("invalid character"));
         assert!(reload_config_entry(base, &"a".repeat(MAX_ENTITY_ID_LEN + 1)).unwrap_err().contains("too long"));
+    }
+
+    #[test]
+    fn test_compact_entity_drops_attributes() {
+        let full = serde_json::json!({
+            "entity_id": "light.living_room",
+            "state": "on",
+            "last_changed": "2024-01-15T10:30:00+00:00",
+            "last_updated": "2024-01-15T10:30:00+00:00",
+            "attributes": {"brightness": 200, "rgb_color": [255, 100, 50]},
+            "context": {"id": "abc", "parent_id": null, "user_id": null}
+        });
+        let c = compact_entity(&full);
+        let obj = c.as_object().expect("compact must be object");
+        assert_eq!(obj.len(), 3, "compact must keep only entity_id, state, last_changed");
+        assert_eq!(obj["entity_id"], "light.living_room");
+        assert_eq!(obj["state"], "on");
+        assert_eq!(obj["last_changed"], "2024-01-15T10:30:00+00:00");
+        assert!(!obj.contains_key("attributes"));
+        assert!(!obj.contains_key("context"));
+        assert!(!obj.contains_key("last_updated"));
+    }
+
+    #[test]
+    fn test_compact_entity_handles_missing_fields() {
+        let minimal = serde_json::json!({"entity_id": "sensor.x", "state": "42"});
+        let c = compact_entity(&minimal);
+        let obj = c.as_object().unwrap();
+        assert_eq!(obj.len(), 2);
+        assert_eq!(obj["entity_id"], "sensor.x");
+        assert!(!obj.contains_key("last_changed"));
+    }
+
+    #[test]
+    fn test_truncate_template_output_under_cap() {
+        let s = "small body".to_string();
+        assert_eq!(truncate_template_output(s.clone(), 100), s);
+    }
+
+    #[test]
+    fn test_truncate_template_output_appends_marker() {
+        let s = "a".repeat(20);
+        let out = truncate_template_output(s, 10);
+        assert!(out.starts_with("aaaaaaaaaa"));
+        assert!(out.contains("truncated, 10 more bytes"));
+        assert!(out.contains("max_chars"));
+    }
+
+    #[test]
+    fn test_truncate_template_output_respects_utf8_boundaries() {
+        // "é" is 2 bytes (0xc3 0xa9). Cap of 1 must back off to 0 to avoid
+        // splitting the codepoint.
+        let s = "é".to_string();
+        let out = truncate_template_output(s, 1);
+        // We retained zero bytes of content, then appended the marker.
+        assert!(out.starts_with("\n…[truncated, 2 more bytes"));
     }
 
     #[test]
