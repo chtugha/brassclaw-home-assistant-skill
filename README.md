@@ -72,6 +72,7 @@ Keep this token ready — you will enter it during installation.
 Run the install script from the repository root:
 
 ```bash
+cargo install cargo-component
 chmod +x scripts/install.sh
 ./scripts/install.sh
 ```
