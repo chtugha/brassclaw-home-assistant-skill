@@ -50,7 +50,7 @@ ironclaw --version
 ## 2. Clone This Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ironclaw-home-assistant-skill.git
+git clone https://github.com/chtugha/ironclaw-home-assistant-skill
 cd ironclaw-home-assistant-skill
 ```
 
