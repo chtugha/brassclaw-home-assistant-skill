@@ -30,7 +30,9 @@ Replace `HA_URL` below with your actual Home Assistant base URL
       If any are present, summarize `title` + `message` + `notification_id`.
 - [ ] `ha-tool get_error_log ha_url=HA_URL` — fetch the error log.
       Report only NEW error/warning lines since the last tick
-      (compare against `heartbeat/ha-last-log.md` in memory).
+      (compare against `heartbeat/ha-last-log.md` in memory; `heartbeat/`
+      is a workspace-relative directory — create it on the first tick if
+      it does not yet exist).
 - [ ] `ha-tool get_states ha_url=HA_URL domain_filter=automation` —
       flag any automation whose `state` is `"unavailable"` or whose
       `attributes.last_triggered` is older than 30 days (possibly stuck).

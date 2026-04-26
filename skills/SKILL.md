@@ -140,10 +140,10 @@ If the user has installed the `ironclaw-remote-shell-extension`, `ha-tool` can p
 - `restart_ha` — prefers `ha core restart` over SSH
 
 ### Shell-only actions (SSH required)
-- `shell_status` — check whether the remote-shell extension is installed/reachable
-- `shell_exec` — run an arbitrary shell command (`command`, optional `timeout_secs`). **Intentionally unrestricted (root-equivalent on the HA host).** Only invoke with explicit user confirmation of the exact command for each call.
+- `shell_status` — check whether the remote-shell extension is installed/reachable. Accepts an optional `gateway_port` (match it to the value used in your `ssh` config when non-default). Returns a JSON object including `remote_shell_available` (bool); inspect this on a fresh session before opting into shell-aware actions.
+- `shell_exec` — run an arbitrary shell command (`command`, optional `timeout_secs`). **Intentionally unrestricted; runs with the privileges of the SSH user (typically `root` on Home Assistant OS / Supervised, but may be a regular user on a plain Linux install).** Only invoke with explicit user confirmation of the exact command for each call.
 - `shell_read_file` — read a file via `cat` (`path`)
-- `shell_write_file` — atomically write a file via `base64 -d` (`path`, `content`)
+- `shell_write_file` — atomically write a file via `base64 -d` (`path`, `content`). Capped at 32 KiB per call so the base64-encoded command stays within the gateway's command-length budget; chunk larger writes manually.
 - `shell_tail_file` — tail last N lines (`path`, `lines`)
 - `ha_cli` — run `ha <args>` (e.g. `core check`, `core restart`, `core logs`, `addons list`)
 

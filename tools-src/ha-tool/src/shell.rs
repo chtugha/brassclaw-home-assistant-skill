@@ -5,7 +5,7 @@ use serde::Deserialize;
 const REMOTE_SHELL_ALIAS: &str = "remote-shell";
 const MAX_COMMAND_LEN: usize = 65_536;
 const MAX_PATH_LEN: usize = 4096;
-const MAX_FILE_WRITE_LEN: usize = 1_048_576; // 1 MiB safety cap
+const MAX_FILE_WRITE_LEN: usize = 32_768;
 const DEFAULT_EXEC_TIMEOUT_SECS: u32 = 60;
 const MIN_EXEC_TIMEOUT_SECS: u32 = 1;
 const MAX_EXEC_TIMEOUT_SECS: u32 = 3600;
@@ -44,10 +44,16 @@ pub struct SshConfig {
 
 /// Probe whether the remote-shell extension is installed and reachable.
 ///
-/// Invokes `list_sessions` which is cheap and side-effect-free. Any Ok
-/// response (even empty session list) means the sibling tool is usable.
-pub fn is_shell_available() -> bool {
-    let p = serde_json::to_string(&serde_json::json!({"action": "list_sessions"}))
+/// Invokes the `health` action against the same gateway port the actual
+/// shell command would use. Any Ok response means the sibling tool is
+/// usable. `health` is the cheapest probe exposed by the remote-shell
+/// extension and has no per-session side effects.
+pub fn is_shell_available(gateway_port: Option<u16>) -> bool {
+    let mut body = serde_json::json!({"action": "health"});
+    if let Some(p) = gateway_port {
+        body["gateway_port"] = serde_json::json!(p);
+    }
+    let p = serde_json::to_string(&body)
         .expect("serializing a static json object is infallible");
     host::tool_invoke(REMOTE_SHELL_ALIAS, &p).is_ok()
 }
@@ -70,7 +76,7 @@ where
     F: FnOnce(&SshConfig) -> Result<String, String>,
 {
     let Some(cfg) = ssh else { return Ok(None) };
-    if !is_shell_available() {
+    if !is_shell_available(cfg.gateway_port) {
         log_shell_fallback(action, "remote-shell extension not installed");
         return Ok(None);
     }
@@ -96,7 +102,7 @@ where
     F: FnOnce(&SshConfig) -> Result<String, String>,
 {
     let Some(cfg) = ssh else { return Ok(None) };
-    if !is_shell_available() {
+    if !is_shell_available(cfg.gateway_port) {
         log_shell_fallback(action, "remote-shell extension not installed");
         return Ok(None);
     }
@@ -150,12 +156,27 @@ fn ensure_session(ssh: &SshConfig) -> Result<String, String> {
     }
     let params = serde_json::to_string(&body).map_err(|e| e.to_string())?;
     let resp = host::tool_invoke(REMOTE_SHELL_ALIAS, &params)?;
-    let v: serde_json::Value = serde_json::from_str(&resp)
-        .map_err(|e| format!("remote-shell connect returned invalid JSON: {}", e))?;
-    v.get("session_id")
-        .and_then(|s| s.as_str())
-        .map(|s| s.to_string())
-        .ok_or_else(|| "remote-shell connect response missing session_id".into())
+    parse_connect_response(&resp)
+}
+
+/// Extract the session id from the human-formatted `connect` response
+/// produced by the remote-shell extension. The expected format is a
+/// multi-line string with a `Session ID: <id>` line; any extra lines
+/// (greeting, message, hint) are ignored so this stays forward-compatible
+/// with cosmetic changes to the response template.
+fn parse_connect_response(raw: &str) -> Result<String, String> {
+    for line in raw.lines() {
+        if let Some(rest) = line.trim_start().strip_prefix("Session ID:") {
+            let id = rest.trim();
+            if !id.is_empty() {
+                return Ok(id.to_string());
+            }
+        }
+    }
+    Err(format!(
+        "remote-shell connect response missing 'Session ID:' line: {}",
+        raw
+    ))
 }
 
 /// Run a command over SSH. `timeout_secs` is clamped to the gateway's 1..=3600 range.
@@ -183,20 +204,75 @@ pub fn shell_exec(ssh: &SshConfig, command: &str, timeout_secs: Option<u32>) -> 
     host::tool_invoke(REMOTE_SHELL_ALIAS, &params)
 }
 
+/// Parse the human-formatted `execute` response produced by the
+/// remote-shell extension into `(exit_code, stdout, stderr)`.
+///
+/// Expected shapes (see `format_execute_response` in remote-shell):
+///
+/// ```text
+/// Exit code: 0
+/// (no output)
+/// ```
+/// or
+/// ```text
+/// Exit code: <n>
+///
+/// --- stdout ---
+/// <stdout body>
+/// --- stderr ---
+/// <stderr body>
+/// ```
+///
+/// Either block may be absent. `Exit code: unknown ...` (timeout) maps
+/// to `-1` so call sites observe a non-zero exit.
 fn parse_exec_output(raw: &str) -> Result<(i32, String, String), String> {
-    let v: serde_json::Value =
-        serde_json::from_str(raw).map_err(|e| format!("invalid shell response: {}", e))?;
-    let exit_code = v.get("exit_code").and_then(|n| n.as_i64()).unwrap_or(-1) as i32;
-    let stdout = v
-        .get("stdout")
-        .and_then(|s| s.as_str())
-        .unwrap_or("")
-        .to_string();
-    let stderr = v
-        .get("stderr")
-        .and_then(|s| s.as_str())
-        .unwrap_or("")
-        .to_string();
+    const STDOUT_MARKER: &str = "--- stdout ---\n";
+    const STDERR_MARKER: &str = "--- stderr ---\n";
+
+    let (header, rest) = raw.split_once('\n').unwrap_or((raw, ""));
+    let exit_str = header.strip_prefix("Exit code: ").ok_or_else(|| {
+        format!(
+            "invalid shell response: expected 'Exit code: ...' header, got {:?}",
+            header
+        )
+    })?;
+    let exit_code: i32 = if exit_str.starts_with("unknown") {
+        -1
+    } else {
+        exit_str
+            .parse()
+            .map_err(|e| format!("invalid exit code '{}': {}", exit_str, e))?
+    };
+
+    if rest.is_empty() || rest.trim() == "(no output)" {
+        return Ok((exit_code, String::new(), String::new()));
+    }
+
+    let stdout_pos = rest.find(STDOUT_MARKER);
+    let stderr_pos = rest.find(STDERR_MARKER);
+    if stdout_pos.is_none() && stderr_pos.is_none() {
+        return Err(format!(
+            "invalid shell response: body has neither stdout/stderr markers nor '(no output)': {:?}",
+            rest
+        ));
+    }
+
+    let extract = |start: Option<usize>, marker_len: usize, other: Option<usize>| -> String {
+        let Some(s) = start else { return String::new() };
+        let content_start = s + marker_len;
+        let content_end = match other {
+            Some(o) if o > s => o,
+            _ => rest.len(),
+        };
+        let slice = &rest[content_start..content_end];
+        match other {
+            Some(o) if o > s => slice.strip_suffix('\n').unwrap_or(slice).to_string(),
+            _ => slice.to_string(),
+        }
+    };
+
+    let stdout = extract(stdout_pos, STDOUT_MARKER.len(), stderr_pos);
+    let stderr = extract(stderr_pos, STDERR_MARKER.len(), stdout_pos);
     Ok((exit_code, stdout, stderr))
 }
 
@@ -234,7 +310,12 @@ pub fn read_file(ssh: &SshConfig, path: &str) -> Result<String, String> {
 pub fn write_file(ssh: &SshConfig, path: &str, content: &str) -> Result<String, String> {
     validate_path(path)?;
     if content.len() > MAX_FILE_WRITE_LEN {
-        return Err(format!("content too large (max {} bytes)", MAX_FILE_WRITE_LEN));
+        return Err(format!(
+            "content too large ({} bytes; max {} bytes per shell command). \
+             Split larger writes into multiple chunks.",
+            content.len(),
+            MAX_FILE_WRITE_LEN
+        ));
     }
     let b64 = b64_encode(content.as_bytes());
     let command = format!("printf %s '{}' | base64 -d > '{}'", b64, path);
@@ -261,6 +342,15 @@ pub fn tail_file(ssh: &SshConfig, path: &str, lines: u32) -> Result<String, Stri
 }
 
 /// Run the Home Assistant `ha` supervisor CLI over SSH.
+///
+/// Unlike `read_file` / `write_file` / `tail_file`, this returns the raw
+/// human-formatted `shell_exec` response (e.g.
+/// `"Exit code: 0\n--- stdout ---\n..."`) verbatim so that the agent can
+/// surface the full output (including timeout indicators and stderr) to
+/// the user. Callers that need structured access to exit code, stdout,
+/// and stderr should call `shell_exec` directly and parse the response
+/// themselves with the same wire format documented on
+/// `parse_exec_output`.
 pub fn ha_cli(ssh: &SshConfig, args: &str) -> Result<String, String> {
     if args.is_empty() {
         return Err("args must not be empty (e.g. 'core check', 'core restart', 'core logs')".into());
@@ -280,8 +370,12 @@ pub fn ha_cli(ssh: &SshConfig, args: &str) -> Result<String, String> {
 }
 
 /// Status snapshot: which shell integration is present.
-pub fn shell_status() -> Result<String, String> {
-    let available = is_shell_available();
+///
+/// Pass `gateway_port` (typically from the caller's `SshConfig.gateway_port`)
+/// so the probe targets the same gateway that subsequent shell-aware actions
+/// will use. Defaults to the standard remote-shell port when `None`.
+pub fn shell_status(gateway_port: Option<u16>) -> Result<String, String> {
+    let available = is_shell_available(gateway_port);
     Ok(serde_json::json!({
         "remote_shell_available": available,
         "alias": REMOTE_SHELL_ALIAS,
@@ -348,6 +442,162 @@ mod tests {
         assert!(validate_path("bad\npath").is_err());
         assert!(validate_path("bad'path").is_err());
         assert!(validate_path("bad\0path").is_err());
+    }
+
+    #[test]
+    fn test_parse_connect_response_happy_path() {
+        let raw = "Connected successfully.\n\
+                   Session ID: abc-123-def\n\
+                   Connected to host.example:22 as alice.\n\n\
+                   Use this session_id for 'execute' and 'disconnect' calls.";
+        assert_eq!(parse_connect_response(raw).unwrap(), "abc-123-def");
+    }
+
+    #[test]
+    fn test_parse_connect_response_missing_line() {
+        let raw = "Connected successfully.\nGreetings.";
+        let err = parse_connect_response(raw).unwrap_err();
+        assert!(err.contains("Session ID"));
+    }
+
+    #[test]
+    fn test_parse_connect_response_empty_id() {
+        let raw = "Connected successfully.\nSession ID: \nfoo";
+        assert!(parse_connect_response(raw).is_err());
+    }
+
+    #[test]
+    fn test_parse_exec_output_no_output() {
+        let raw = "Exit code: 0\n(no output)";
+        let (code, out, err) = parse_exec_output(raw).unwrap();
+        assert_eq!(code, 0);
+        assert_eq!(out, "");
+        assert_eq!(err, "");
+    }
+
+    #[test]
+    fn test_parse_exec_output_stdout_only() {
+        let raw = "Exit code: 0\n\n--- stdout ---\nhello world\n";
+        let (code, out, err) = parse_exec_output(raw).unwrap();
+        assert_eq!(code, 0);
+        assert_eq!(out, "hello world\n");
+        assert_eq!(err, "");
+    }
+
+    #[test]
+    fn test_parse_exec_output_stderr_only() {
+        let raw = "Exit code: 1\n\n--- stderr ---\nboom";
+        let (code, out, err) = parse_exec_output(raw).unwrap();
+        assert_eq!(code, 1);
+        assert_eq!(out, "");
+        assert_eq!(err, "boom");
+    }
+
+    #[test]
+    fn test_parse_exec_output_both_streams() {
+        // Canonical wire format from `format_execute_response`: stdout content
+        // followed by "\n--- stderr ---\n". When stdout did not already end
+        // with '\n', exactly one '\n' sits between the content and the next
+        // marker (it's the separator '\n' from the marker template).
+        let raw = "Exit code: 2\n\n--- stdout ---\nout-line\n--- stderr ---\nerr-line";
+        let (code, out, err) = parse_exec_output(raw).unwrap();
+        assert_eq!(code, 2);
+        assert_eq!(out, "out-line");
+        assert_eq!(err, "err-line");
+    }
+
+    #[test]
+    fn test_parse_exec_output_both_streams_trailing_newline() {
+        // Variant where stdout content already ends with '\n' (e.g. `cat file`
+        // output): formatter appends "\n--- stderr ---\n" giving two '\n'
+        // chars between content and the marker. The parser strips exactly
+        // the separator '\n', preserving the content's own trailing newline.
+        let raw = "Exit code: 0\n\n--- stdout ---\nout\n\n--- stderr ---\nerr\n";
+        let (code, out, err) = parse_exec_output(raw).unwrap();
+        assert_eq!(code, 0);
+        assert_eq!(out, "out\n");
+        assert_eq!(err, "err\n");
+    }
+
+    #[test]
+    fn test_parse_exec_output_unknown_body_is_err() {
+        // Defensive: if the body is non-empty, isn't `(no output)`, and
+        // contains no recognisable marker, surface it as an error rather
+        // than silently returning empty stdout/stderr.
+        let raw = "Exit code: 0\nunexpected footer line";
+        let err = parse_exec_output(raw).unwrap_err();
+        assert!(err.contains("invalid shell response"));
+    }
+
+    #[test]
+    fn test_parse_exec_output_unknown_exit_code() {
+        let raw = "Exit code: unknown (command may have timed out)\n(no output)";
+        let (code, out, err) = parse_exec_output(raw).unwrap();
+        assert_eq!(code, -1);
+        assert_eq!(out, "");
+        assert_eq!(err, "");
+    }
+
+    #[test]
+    fn test_parse_exec_output_invalid_header() {
+        let raw = "{\"exit_code\": 0, \"stdout\": \"\", \"stderr\": \"\"}";
+        assert!(parse_exec_output(raw).is_err());
+    }
+
+    #[test]
+    fn test_parse_exec_output_roundtrip_format() {
+        // Mirrors `format_execute_response` in the remote-shell extension to
+        // catch wire-format drift between the two repos.
+        let format = |exit: Option<i32>, stdout: &str, stderr: &str| -> String {
+            let exit_str = exit
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "unknown (command may have timed out)".into());
+            if stdout.is_empty() && stderr.is_empty() {
+                return format!("Exit code: {exit_str}\n(no output)");
+            }
+            let mut s = format!("Exit code: {exit_str}\n");
+            if !stdout.is_empty() {
+                s.push_str("\n--- stdout ---\n");
+                s.push_str(stdout);
+            }
+            if !stderr.is_empty() {
+                s.push_str("\n--- stderr ---\n");
+                s.push_str(stderr);
+            }
+            s
+        };
+
+        let cases: &[(Option<i32>, &str, &str)] = &[
+            (Some(0), "", ""),
+            (Some(0), "ok\n", ""),
+            (Some(1), "", "fail"),
+            (Some(2), "out", "err"),
+            (Some(2), "out\n", "err\n"),
+            (None, "", ""),
+        ];
+        for (exit, stdout, stderr) in cases {
+            let raw = format(*exit, stdout, stderr);
+            let (code, out, err) = parse_exec_output(&raw).unwrap();
+            let expected_code = exit.unwrap_or(-1);
+            assert_eq!(code, expected_code, "exit mismatch for {:?}", raw);
+            assert_eq!(out, *stdout, "stdout mismatch for {:?}", raw);
+            assert_eq!(err, *stderr, "stderr mismatch for {:?}", raw);
+        }
+    }
+
+    #[test]
+    fn test_max_file_write_len_fits_in_command_budget() {
+        // The base64-encoded payload + skeleton + worst-case path must fit
+        // inside MAX_COMMAND_LEN, otherwise write_file's cap is unreachable.
+        let b64_len = (MAX_FILE_WRITE_LEN + 2) / 3 * 4;
+        let skeleton = "printf %s '' | base64 -d > ''".len();
+        let worst_case = b64_len + skeleton + MAX_PATH_LEN;
+        assert!(
+            worst_case <= MAX_COMMAND_LEN,
+            "MAX_FILE_WRITE_LEN cap unreachable: worst-case command {} > {}",
+            worst_case,
+            MAX_COMMAND_LEN
+        );
     }
 
     #[test]

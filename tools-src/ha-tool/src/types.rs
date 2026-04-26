@@ -169,7 +169,10 @@ pub enum HaAction {
         ssh: Option<SshConfig>,
     },
 
-    ShellStatus,
+    ShellStatus {
+        #[serde(default)]
+        gateway_port: Option<u16>,
+    },
 
     ShellExec {
         ssh: SshConfig,

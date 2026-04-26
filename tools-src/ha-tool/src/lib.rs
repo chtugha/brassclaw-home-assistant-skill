@@ -117,7 +117,7 @@ fn execute_inner(params: &str) -> Result<String, String> {
             api::get_error_log(&ha_url, tail_lines, ssh.as_ref(), log_path.as_deref())
         }
         HaAction::RestartHa { ha_url, ssh } => api::restart_ha(&ha_url, ssh.as_ref()),
-        HaAction::ShellStatus => shell::shell_status(),
+        HaAction::ShellStatus { gateway_port } => shell::shell_status(gateway_port),
         HaAction::ShellExec { ssh, command, timeout_secs } => {
             shell::shell_exec(&ssh, &command, timeout_secs)
         }
