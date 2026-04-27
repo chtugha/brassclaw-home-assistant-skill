@@ -116,7 +116,7 @@ What happens on re-install:
 - **ha-tool** — rebuilt and reinstalled from the latest source.
 - **SKILL.md** — automatically upgraded if a newer version is available. Skipped if already up to date.
 - **HEARTBEAT.md & routines.md** — **not overwritten** if they already exist (to preserve your edits). If the new version has changes, merge them manually from `heartbeat/HEARTBEAT.md` and `heartbeat/routines.md` in the repo.
-- **HA token** — you will be prompted again. If your existing token still works, just paste the same one or press Ctrl+C to skip.
+- **HA token** — you will be prompted again. If your existing token still works, just paste the same one. To update it later without re-running the full installer, run `ironclaw tool auth ha-tool` directly.
 
 ---
 
@@ -219,7 +219,7 @@ ironclaw-home-assistant-skill/
 │   │   ├── shell.rs        # SSH shell operations
 │   │   └── types.rs        # Data types and JSON schema
 │   └── Cargo.toml
-├── skills/SKILL.md          # AI skill hint (installed to ~/.ironclaw/skills/)
+├── skills/SKILL.md          # AI skill hint (installed to ~/.ironclaw/skills/home-assistant/SKILL.md)
 ├── heartbeat/
 │   ├── HEARTBEAT.md         # Background monitoring template
 │   └── routines.md          # Cron routine prompts
