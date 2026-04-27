@@ -1,556 +1,245 @@
 # IronClaw Home Assistant Extension
 
-A WASM tool for [IronClaw](https://github.com/nearai/ironclaw) that gives the AI agent full control over a [Home Assistant](https://www.home-assistant.io/) instance via its REST API.
-
-Capabilities include: entity state read/write, service calls, automations, scripts, scenes, MQTT publish, Modbus coil/register writes, Jinja2 template rendering, history, logbook, calendar events, persistent notifications, configuration validation, error logs, and system restart.
+Give your [IronClaw](https://github.com/nearai/ironclaw) AI agent full control over [Home Assistant](https://www.home-assistant.io/) — lights, climate, automations, sensors, MQTT, Modbus, and more — all through natural language.
 
 ---
 
-## Requirements
+## What You Need
 
-- Debian 12 (Bookworm) or later — commands below are for Debian/Ubuntu
-- IronClaw CLI installed and working
-- A running Home Assistant instance reachable from the machine
-- A Home Assistant **long-lived access token**
+Before you start, make sure you have these three things:
 
----
+| # | Requirement | How to check | How to install |
+|---|---|---|---|
+| 1 | **Rust** | Run `cargo --version` | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh -s -- -y` then **open a new terminal** |
+| 2 | **IronClaw** | Run `ironclaw --version` | See [IronClaw installation](https://github.com/nearai/ironclaw) |
+| 3 | **Home Assistant** | Open `http://<your-ha-ip>:8123` in a browser | [home-assistant.io/installation](https://www.home-assistant.io/installation/) |
 
-## 1. Install Prerequisites
-
-### 1a. Install Rust (if not installed)
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source "$HOME/.cargo/env"
-```
-
-Verify:
-
-```bash
-rustc --version
-cargo --version
-```
-
-### 1b. Install IronClaw (if not installed)
-
-Follow the official instructions at https://github.com/nearai/ironclaw.
-
-Typically:
-
-```bash
-# Download the latest ironclaw binary for Linux x86_64
-curl -L https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-linux-x86_64 \
-  -o /usr/local/bin/ironclaw
-chmod +x /usr/local/bin/ironclaw
-ironclaw --version
-```
+> **Tip:** If `cargo` is not found after installing Rust, run `source "$HOME/.cargo/env"` or open a new terminal window.
 
 ---
 
-## 2. Clone This Repository
+## Installation
+
+Three commands. The install script handles everything else.
 
 ```bash
 git clone https://github.com/chtugha/ironclaw-home-assistant-skill
 cd ironclaw-home-assistant-skill
-```
-
----
-
-## 3. Create a Home Assistant Long-Lived Access Token
-
-1. Open your Home Assistant instance in a browser
-2. Click your **profile name** in the left sidebar (bottom)
-3. Scroll down to **Long-Lived Access Tokens**
-4. Click **Create Token**, give it a name (e.g. `ironclaw`), and copy the token
-
-Keep this token ready — you will enter it during installation.
-
----
-
-## 4. Install the Extension
-
-Run the install script from the repository root:
-
-```bash
-cargo install cargo-component
-chmod +x scripts/install.sh
 ./scripts/install.sh
 ```
 
-The script will:
+The installer will walk you through 5 steps:
 
-1. Install the tool from source via `ironclaw tool install ./tools-src/ha-tool` — IronClaw builds the WASM for you and auto-registers it in its **Tool Registry** (no skill required for the agent to find and use the tool).
-2. Copy the **optional** skill hint to `~/.ironclaw/skills/home-assistant.SKILL.md` — this enhances the agent's context but the tool works without it.
-3. Launch `ironclaw tool auth ha-tool` to securely store your HA long-lived access token (never touches the WASM sandbox — IronClaw injects it as a `Bearer` header at the host boundary).
+| Step | What happens | What you do |
+|---|---|---|
+| 1 | Installs build tools (`cargo-component`, WASM target) | Nothing — automatic |
+| 2 | Asks for your Home Assistant URL | Type your URL (e.g. `http://192.168.1.100:8123`) |
+| 3 | Compiles and installs the `ha-tool` WASM extension from source | Nothing — automatic (takes 1–2 min on first run) |
+| 4 | Installs skill file, heartbeat, and routine templates | Nothing — automatic |
+| 5 | Asks for your Home Assistant access token | Paste your token (see below) |
 
-When prompted by `ironclaw tool auth ha-tool`, paste the long-lived access token you created above.
+### How to Create Your Home Assistant Token
 
-### Expected output
+The installer will pause at Step 5 and ask you to paste a token. **Create this before you start, or have it ready when Step 5 appears.**
 
-```
-==> Installing ha-tool from source (IronClaw will build the WASM)...
-Installed successfully:
-  Name: ha-tool
-  WASM: ~/.ironclaw/tools/ha-tool.wasm
-  Size: ~300 KB
+1. Open your Home Assistant in a browser — go directly to your **profile page**:
+   `http://<your-ha-ip>:8123/profile`
+2. Scroll all the way down to **Long-Lived Access Tokens**
+3. Click **Create Token**
+4. Name it `ironclaw` (or anything you like)
+5. **Copy the token immediately** — you won't be able to see it again
+6. Go back to your terminal and paste the token when prompted
 
-==> Installing optional skill file (agent hint — not required)...
-  Installed skill: ~/.ironclaw/skills/home-assistant.SKILL.md
-
-==> Configuring Home Assistant access token...
-  Home Assistant long-lived access token: ****
-  ✓ Saved.
-```
+> **Security:** The token is stored in IronClaw's encrypted secret store. It never appears in plaintext on disk or in chat logs.
 
 ---
 
-## 5. Verify the Installation
+## Verify It Works
+
+After installation completes, run:
 
 ```bash
 ironclaw tool list
 ```
 
-You should see `ha-tool` in the list. For detailed info:
-
-```bash
-ironclaw tool info ha-tool
-```
-
-The skill hint (optional) lives at `~/.ironclaw/skills/home-assistant.SKILL.md`. IronClaw's Tool Registry auto-discovers the tool itself — the skill only adds extra context to the agent's system prompt.
-
----
-
-## 6. Using the Extension from the IronClaw Chat Console
-
-Start the IronClaw chat session:
+You should see `ha-tool` in the output. Then start a chat:
 
 ```bash
 ironclaw chat
 ```
 
-The agent automatically activates the `home-assistant` skill when your message mentions home automation topics (lights, switches, automations, MQTT, Modbus, etc.).
-
-**Every request must include your Home Assistant URL.** Tell the agent once at the start of the session and it will use it for all subsequent calls.
-
----
-
-## Chat Usage Examples
-
-### First message — tell the agent your HA URL
-
-```
-My Home Assistant is at http://192.168.1.100:8123
-```
-
-Or provide it inline with your first request:
+Try saying:
 
 ```
 Is my Home Assistant at http://192.168.1.100:8123 online?
 ```
 
----
-
-### Check HA status
-
-```
-Check if my Home Assistant at http://192.168.1.100:8123 is reachable.
-```
+(Replace with your actual URL.) The agent should respond with your HA status.
 
 ---
 
-### List all entities (or by domain)
+## What Can It Do?
 
-```
-Show me all light entities in Home Assistant.
-```
+Once installed, just talk to the agent naturally. Here are some examples:
 
-```
-List all climate entities.
-```
-
-```
-What sensors do I have?
-```
-
-```
-Give me a compact list of lights, switches, and sensors in one call.
-```
-
-`get_states` accepts a single `domain_filter` (e.g. `"light"`) or an array
-(e.g. `["light","switch","sensor"]`) and a `compact: true` flag that
-projects each entity down to `{entity_id, state, last_changed?}` —
-**use it during discovery to drastically cut token cost**, then call
-`get_state` for the few entities you need full attributes for.
-The response includes `matched` (post-filter count), `total` (full HA
-entity count), and `cap_kind` (`"user"` or `"hard"`) when truncated.
-
----
-
-### Get and set entity state
-
-```
-What is the current state of sensor.living_room_temperature?
-```
-
-```
-Set light.bedroom to state 'on' with brightness 150.
-```
-
-```
-Delete the manually-created state input_text.test_value.
-```
-
-`delete_state` removes a manually-created state via HA's
-`DELETE /api/states/{entity_id}` endpoint — useful for cleaning up after
-`set_state` experiments.
-
----
-
-### Turn lights and switches on/off
-
-```
-Turn on light.living_room.
-```
-
-```
-Turn off switch.garden_pump.
-```
-
-```
-Set the bedroom light to 50% brightness and color temperature 3000K.
-```
-
----
-
-### Climate / thermostat control
-
-```
-Set climate.living_room to heat mode, target 21°C.
-```
-
-```
-What is the current temperature reported by climate.bedroom?
-```
-
----
-
-### Automations
-
-```
-List all my automations.
-```
-
-```
-Enable automation.morning_routine.
-```
-
-```
-Disable automation.night_mode.
-```
-
-```
-Trigger automation.welcome_home now.
-```
-
----
-
-### Scripts
-
-```
-List all scripts.
-```
-
-```
-Run script.goodnight_routine.
-```
-
-```
-Run script.set_scene with variables {"brightness": 100}.
-```
-
----
-
-### Scenes
-
-```
-List all scenes.
-```
-
-```
-Activate scene.movie_time.
-```
-
----
-
-### MQTT
-
-```
-Publish MQTT message "ON" to topic home/bedroom/light/command.
-```
-
-```
-Publish payload "22.5" to topic home/sensor/temp with QoS 1 and retain true.
-```
-
----
-
-### Modbus
-
-```
-Write true to Modbus coil at address 0, unit 1.
-```
-
-```
-Write value 1500 to Modbus holding register address 10, unit 1.
-```
-
-```
-Write to Modbus coil address 5, unit 2, hub "modbus_hub", value false.
-```
-
----
-
-### Templates
-
-```
-Render the template: {{ states('sensor.living_room_temperature') }}°C
-```
-
-```
-Evaluate: {% if states('binary_sensor.door') == 'on' %}Door is open{% else %}Door is closed{% endif %}
-```
-
-`render_template` accepts optional `variables` (an object forwarded to
-HA) and `max_chars` to widen the default 8 KiB output cap (hard ceiling
-16 KiB). When the rendered output exceeds the cap, the response ends
-with `…[truncated, N more bytes — pass `max_chars` to widen]`.
-
----
-
-### History and logbook
-
-```
-Show me the state history of sensor.power_meter for the last 6 hours.
-```
-
-```
-Show the logbook for automation.irrigation_morning for the last 48 hours.
-```
-
-```
-Show history for light.kitchen from 2024-06-01T00:00:00Z.
-```
-
-```
-Show history for light.kitchen between 2024-06-01T00:00:00Z and 2024-06-02T00:00:00Z.
-```
-
-Both `get_history` and `get_logbook` accept `start_time` and `end_time`
-(ISO 8601). When neither is supplied they fall back to `hours_back`
-(default 24, max 8760). **Always bound the window** to avoid
-unintentionally pulling the full HA history into context.
-
----
-
-### Calendar events
-
-```
-Show calendar events for calendar.family from 2024-07-01T00:00:00Z to 2024-07-07T23:59:59Z.
-```
-
----
-
-### Events
-
-```
-Fire event my_custom_event on the Home Assistant event bus.
-```
-
-```
-Fire event notify_alarm with data {"zone": "front_door"}.
-```
-
----
-
-### Send a notification
-
-```
-Send a push notification to mobile_app_my_phone: "Garage door is open".
-```
-
-(Uses `call_service` with domain `notify` and the target service name from your HA notify integrations.)
-
----
-
-### Persistent notifications
-
-```
-List all pending Home Assistant notifications.
-```
-
-```
-Dismiss notification with ID motion_detected_123.
-```
-
----
-
-### Configuration and system
-
-```
-Show my Home Assistant configuration (version, location, units).
-```
-
-```
-Check if the Home Assistant configuration is valid.
-```
-
-```
-Show me the Home Assistant error log.
-```
-
-```
-List all available services in Home Assistant.
-```
-
-```
-Restart Home Assistant.
-```
-
----
-
-### Reloading YAML changes without restart
-
-```
-Reload Home Assistant core configuration.
-```
-
-```
-Reload automations.
-```
-
-```
-Reload scripts.
-```
-
-```
-Reload scenes.
-```
-
-```
-Reload themes.
-```
-
-```
-Reload the config entry abc123def456.
-```
-
----
-
-## Complementary: Home Assistant MCP Server
-
-Home Assistant ships an optional [MCP Server integration](https://www.home-assistant.io/integrations/mcp_server/) that exposes Assist-domain entities over the Model Context Protocol. IronClaw natively supports MCP clients, so you can enable both:
-
-- **`ha-tool` (this extension)** — full REST coverage: state read/write, service calls, automations, scripts, scenes, MQTT, Modbus, templates, history, logbook, calendar, persistent notifications, reloads, error log, restart.
-- **HA MCP Server (optional)** — conversational Assist-exposed entities via MCP, useful for natural-language control of the subset of entities you flag as "exposed to Assist".
-
-They are complementary — the REST tool covers administration and maintenance the MCP server doesn't, and the MCP server provides a curated conversational surface that respects HA's Assist exposure settings.
-
----
-
-## Token-Efficiency & Agent Tips
-
-Local-LLM users should keep the agent's context tight. The tool ships
-several knobs designed for this:
-
-- **`get_states { compact: true }`** — drops the verbose `attributes`
-  map and timestamps, returning only `entity_id` + `state` per entity.
-  This is the single biggest token saver during discovery.
-- **`get_states { domain_filter: [...] }`** — accepts an array so you
-  can union-fetch multiple domains in a single round-trip instead of
-  three separate calls.
-- **`render_template { max_chars }`** — caps the rendered body
-  (default 8 KiB, hard ceiling 16 KiB) and appends a truncation marker
-  so the agent knows it can ask for more.
-- **`get_history` / `get_logbook` with `start_time` + `end_time`** —
-  bound the time window. Without bounds, HA can return MBs of history.
-- **`shell_status`** — call once per session if you intend to use SSH
-  paths so you don't waste a round-trip per shell-aware action only to
-  fall back to REST.
-- **Silent shell→REST fallback warning.** When `check_config` or
-  `get_error_log` is called with `ssh` and the shell path fails, the
-  tool logs a `Warn` and silently uses REST. `restart_ha` is the
-  exception — it surfaces shell errors instead of falling back.
-
-## Limitations
-
-- **No real-time event subscription.** WASM tools are request/response only — there is no WebSocket event loop. Use `get_history` and `get_logbook` for time-range queries, or poll `get_state` for near-real-time monitoring.
-- **No direct YAML file editing.** To apply YAML changes, edit files via HA's File Editor add-on or SSH, then run the appropriate `reload_*` action. Config Entry reloads (for integrations configured via the UI) are supported via `reload_config_entry`.
-
----
-
-## Supported ha_url Formats
-
-The `ha_url` parameter must point to a **private or local address**. Public internet IPs are blocked for security.
-
-| Format | Example |
+| What you say | What happens |
 |---|---|
-| LAN IP with port | `http://192.168.1.100:8123` |
-| mDNS hostname | `http://homeassistant.local:8123` |
-| Custom LAN hostname | `http://myha.lan:8123` |
-| DuckDNS | `https://myha.duckdns.org` |
-| Nabu Casa cloud | `https://XXXXX.ui.nabu.casa` |
-| Localhost | `http://localhost:8123` |
+| `Show me all lights.` | Lists every light entity and its state |
+| `Turn on light.living_room.` | Turns on the light |
+| `Set the thermostat to 21°C in heat mode.` | Calls the climate service |
+| `List my automations.` | Shows all automations and their status |
+| `Trigger automation.welcome_home.` | Fires the automation |
+| `Run script.goodnight_routine.` | Executes the script |
+| `Activate scene.movie_time.` | Activates the scene |
+| `Publish "ON" to MQTT topic home/light/command.` | Sends an MQTT message |
+| `Show history for sensor.temperature, last 6 hours.` | Pulls entity history |
+| `Check my HA config for errors.` | Validates configuration |
+| `Show the error log.` | Fetches recent error log entries |
+| `Send a notification to my phone: "Garage is open".` | Pushes via notify service |
+| `Reload automations.` | Reloads YAML automations without restart |
+
+The agent figures out which `ha-tool` action to call based on what you say. You don't need to know the API — just describe what you want.
 
 ---
 
-## Rebuilding After Updates
-
-If you pull new changes, rebuild and reinstall:
+## Updating
 
 ```bash
+cd ironclaw-home-assistant-skill
 git pull
 ./scripts/install.sh
 ```
 
-To build only the WASM without reinstalling:
+What happens on re-install:
 
-```bash
-./scripts/build.sh
-```
+- **HA URL** — remembered from last time. Press Enter to keep it, or type a new one.
+- **ha-tool** — rebuilt and reinstalled from the latest source.
+- **SKILL.md** — automatically upgraded if a newer version is available. Skipped if already up to date.
+- **HEARTBEAT.md & routines.md** — **not overwritten** if they already exist (to preserve your edits). If the new version has changes, merge them manually from `heartbeat/HEARTBEAT.md` and `heartbeat/routines.md` in the repo.
+- **HA token** — you will be prompted again. If your existing token still works, just paste the same one or press Ctrl+C to skip.
 
 ---
 
-## Security Notes
+## Accepted URL Formats
 
-- The HA token is stored securely by IronClaw's secret store and never written to disk in plaintext.
-- The token is automatically injected as an HTTP `Authorization: Bearer` header by the IronClaw host — it is never visible in tool parameters or chat logs.
-- The `ha_url` is validated on every call and restricted to private/local address ranges to prevent token exfiltration.
-- To revoke access: delete the token in Home Assistant (Profile → Long-Lived Access Tokens) and run `ironclaw tool auth ha-tool` again with a new token.
+Your Home Assistant URL must point to a private/local address (public IPs are blocked for security):
+
+| Type | Example |
+|---|---|
+| LAN IP (192.168.x.x) | `http://192.168.1.100:8123` |
+| LAN IP (10.x.x.x) | `http://10.0.0.50:8123` |
+| LAN IP (172.16–31.x.x) | `http://172.16.0.10:8123` |
+| Loopback | `http://localhost:8123` or `http://127.0.0.1:8123` |
+| mDNS | `http://homeassistant.local:8123` |
+| Custom hostname | `http://myha.lan:8123`, `http://myha.home:8123`, `http://myha.internal:8123` |
+| DuckDNS | `https://myha.duckdns.org` |
+| Nabu Casa | `https://XXXXX.ui.nabu.casa` |
+
+Using a reverse proxy with a custom domain? The installer will ask if you want to use it anyway — type `y` to confirm.
+
+---
+
+## Optional: Background Monitoring
+
+The installer places two template files in `~/.ironclaw/` that enable automatic Home Assistant monitoring:
+
+### Heartbeat (`HEARTBEAT.md`)
+
+IronClaw reads this file on every heartbeat tick (default: every 30 minutes, configurable via `HEARTBEAT_INTERVAL_SECS`) and runs read-only health checks:
+
+- Is HA reachable?
+- Is the configuration valid?
+- Are there new errors in the log?
+- Are any automations stuck or unavailable?
+- Are any batteries low?
+- Are any updates available?
+
+If something is wrong, the agent sends you a notification with proposed fixes. **It never makes changes without your confirmation.**
+
+### Cron Routines (`routines.md`)
+
+Pre-written prompts you can paste into `ironclaw chat` to create scheduled monitoring jobs:
+
+- **Hourly health check** — status, config, notifications
+- **Daily error digest** — ERROR/WARNING lines from the last 24 hours
+- **Weekly update scan** — lists available HA updates every Monday
+- **Stuck-automation scan** — flags unavailable automations every 6 hours
+- **Battery sweep** — daily check for low-battery devices
+
+Open `~/.ironclaw/routines.md`, copy any routine prompt, paste it into a chat session, and the agent creates the cron job for you.
+
+---
+
+## Optional: SSH Shell Access
+
+If you install the [ironclaw-remote-shell-extension](https://github.com/nearai/ironclaw) (see the IronClaw docs for available extensions), `ha-tool` gains direct shell access to your HA host:
+
+- Run arbitrary commands (`shell_exec`)
+- Read and write files (`shell_read_file`, `shell_write_file`)
+- Run HA supervisor CLI commands (`ha_cli`)
+- Edit YAML configs and reload without restart
+
+Actions like `check_config`, `get_error_log`, and `restart_ha` automatically prefer SSH when available and fall back to REST when it's not.
 
 ---
 
 ## Troubleshooting
 
-**`cargo` not found**
-Run `source "$HOME/.cargo/env"` or open a new terminal after installing Rust.
+| Problem | Solution |
+|---|---|
+| `cargo: command not found` | Run `source "$HOME/.cargo/env"` or open a new terminal |
+| `ironclaw: command not found` | Make sure IronClaw is installed and in your `$PATH` |
+| Build fails with "can't find crate `std`" | Run `rustup target add wasm32-wasip2` |
+| HA API returns **401 Unauthorized** | Your token is expired or revoked — create a new one in HA, then run `ironclaw tool auth ha-tool` |
+| HA API returns **400** or **404** | Wrong entity ID or service name — ask the agent to `show all lights` (or sensors, etc.) first |
+| URL rejected by the tool | Must be a private/local address — see [Accepted URL Formats](#accepted-url-formats) |
+| Agent doesn't use `ha-tool` | Make sure `ironclaw tool list` shows `ha-tool` — re-run `./scripts/install.sh` if needed |
 
-**`ironclaw` not found**
-Ensure the binary is in your `$PATH`. Check with `which ironclaw`.
+---
 
-**Build fails: `error[E0463]: can't find crate for 'std'`**
-The WASM target is missing. Run:
-```bash
-rustup target add wasm32-wasip2
+## How It Works (Technical)
+
+- `ha-tool` is a Rust WASM component that runs inside IronClaw's sandbox
+- It communicates with Home Assistant via the [REST API](https://developers.home-assistant.io/docs/api/rest/)
+- Your HA token is stored in IronClaw's secret store and injected as `Authorization: Bearer` — it never enters the WASM sandbox
+- The `SKILL.md` file helps IronClaw's AI know when to activate this tool based on your conversation
+- All URL validation happens both in the install script (for templates) and in the Rust code (on every API call)
+
+### Project Structure
+
+```
+ironclaw-home-assistant-skill/
+├── scripts/
+│   ├── install.sh          # Interactive installer (run this)
+│   └── build.sh            # Standalone build script (for development)
+├── tools-src/ha-tool/      # Rust WASM source code
+│   ├── src/
+│   │   ├── lib.rs          # Entry point, action dispatcher
+│   │   ├── api.rs          # HA REST API calls
+│   │   ├── shell.rs        # SSH shell operations
+│   │   └── types.rs        # Data types and JSON schema
+│   └── Cargo.toml
+├── skills/SKILL.md          # AI skill hint (installed to ~/.ironclaw/skills/)
+├── heartbeat/
+│   ├── HEARTBEAT.md         # Background monitoring template
+│   └── routines.md          # Cron routine prompts
+├── dist/                    # Build output (generated by build.sh)
+└── wit/tool.wit             # WASM interface definition
 ```
 
-**`ironclaw tool auth ha-tool` prompts for token but auth fails**
-Ensure IronClaw is configured with a valid API key first (`ironclaw login`).
+---
 
-**HA API returns 401 Unauthorized**
-The HA token may be expired or revoked. Create a new one in HA Profile and re-run `ironclaw tool auth ha-tool`.
+## Complementary: HA MCP Server
 
-**HA API returns 400 or 404**
-Check that the entity ID, domain, and service name are correct. Use `get_states` or `get_services` to discover exact names.
+If your HA instance has the [MCP Server integration](https://www.home-assistant.io/integrations/mcp_server/) enabled, you can use both together:
 
-**`ha_url` rejected as not a private address**
-Your HA URL must be a local/private address. Public IPs are blocked. If you use Nabu Casa or DuckDNS, those are allowed.
+- **ha-tool** — full REST API coverage: maintenance, reloads, MQTT, Modbus, templates, raw state writes, error logs, restart
+- **HA MCP Server** — conversational Assist-exposed entities
+
+They cover different parts of HA and work well side by side.
+
+---
+
+## License
+
+MIT OR Apache-2.0

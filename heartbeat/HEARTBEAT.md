@@ -1,12 +1,13 @@
 # Home Assistant Heartbeat Checklist
 
-Copy this file to your IronClaw workspace root as `HEARTBEAT.md` to enable
-background monitoring and semi-autonomous maintenance of your Home Assistant
-instance. The agent reads it on every heartbeat tick
-(default: every 30 minutes — see `HEARTBEAT_INTERVAL_SECS`).
+<!-- INSTALL_PREAMBLE: This file is a template. {{HA_URL}} placeholders are
+     replaced automatically by scripts/install.sh during installation.
+     If you are editing this file manually, replace every {{HA_URL}} with
+     your Home Assistant base URL (e.g. http://192.168.1.100:8123). -->
 
-Replace `HA_URL` below with your actual Home Assistant base URL
-(e.g. `http://homeassistant.local:8123`, `http://192.168.1.50:8123`).
+IronClaw reads this file on every heartbeat tick (default: every 30 minutes).
+It runs read-only health checks, detects problems, and proposes fixes.
+No changes are made without your explicit confirmation.
 
 ## Confirmation Rules (MANDATORY)
 
@@ -22,25 +23,25 @@ Replace `HA_URL` below with your actual Home Assistant base URL
 
 ## Read-only Checks (safe every tick)
 
-- [ ] `ha-tool get_status ha_url=HA_URL` — confirm HA is reachable. If the call
+- [ ] `ha-tool get_status ha_url={{HA_URL}}` — confirm HA is reachable. If the call
       fails or returns non-200, notify the user immediately with the error.
-- [ ] `ha-tool check_config ha_url=HA_URL` — validate HA configuration. If
+- [ ] `ha-tool check_config ha_url={{HA_URL}}` — validate HA configuration. If
       `result` is not `"valid"`, notify the user with the `errors` field.
-- [ ] `ha-tool get_notifications ha_url=HA_URL` — list persistent notifications.
+- [ ] `ha-tool get_notifications ha_url={{HA_URL}}` — list persistent notifications.
       If any are present, summarize `title` + `message` + `notification_id`.
-- [ ] `ha-tool get_error_log ha_url=HA_URL` — fetch the error log.
+- [ ] `ha-tool get_error_log ha_url={{HA_URL}}` — fetch the error log.
       Report only NEW error/warning lines since the last tick
       (compare against `heartbeat/ha-last-log.md` in memory; `heartbeat/`
       is a workspace-relative directory — create it on the first tick if
       it does not yet exist).
-- [ ] `ha-tool get_states ha_url=HA_URL domain_filter=automation` —
+- [ ] `ha-tool get_states ha_url={{HA_URL}} domain_filter=automation` —
       flag any automation whose `state` is `"unavailable"` or whose
       `attributes.last_triggered` is older than 30 days (possibly stuck).
-- [ ] `ha-tool get_states ha_url=HA_URL domain_filter=binary_sensor` —
+- [ ] `ha-tool get_states ha_url={{HA_URL}} domain_filter=binary_sensor` —
       flag any `connectivity` / `problem` / `battery_low` sensor that is `on`.
-- [ ] `ha-tool get_states ha_url=HA_URL domain_filter=sensor` —
+- [ ] `ha-tool get_states ha_url={{HA_URL}} domain_filter=sensor` —
       flag any sensor in state `"unavailable"` or `"unknown"`.
-- [ ] `ha-tool get_states ha_url=HA_URL domain_filter=update` —
+- [ ] `ha-tool get_states ha_url={{HA_URL}} domain_filter=update` —
       flag any `update.*` entity whose state is `"on"` (update available).
 
 ## Analysis & Proposal
