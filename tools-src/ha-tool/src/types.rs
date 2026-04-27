@@ -1,6 +1,19 @@
 use crate::shell::SshConfig;
-use schemars::JsonSchema;
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::{Deserialize, Serialize};
+
+/// Schemars 1 emits the boolean schema `true` for `serde_json::Value`
+/// when used in a non-Option position. Several LLM tool-call parsers
+/// (e.g. Ollama's `ToolFunctionParameters`) reject boolean schemas
+/// under `properties.<key>` and expect an object schema. This helper
+/// emits an explicit object schema that accepts any JSON value while
+/// remaining structurally an object.
+fn any_json_value_schema(_: &mut SchemaGenerator) -> Schema {
+    schemars::json_schema!({
+        "description": "Any JSON value (boolean, number, string, array, or object).",
+        "type": ["boolean", "integer", "number", "string", "array", "object", "null"]
+    })
+}
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(untagged)]
@@ -45,6 +58,7 @@ pub enum HaAction {
         entity_id: String,
         state: String,
         #[serde(default)]
+        #[schemars(schema_with = "any_json_value_schema")]
         attributes: Option<serde_json::Value>,
     },
 
@@ -58,6 +72,7 @@ pub enum HaAction {
         domain: String,
         service: String,
         #[serde(default)]
+        #[schemars(schema_with = "any_json_value_schema")]
         data: Option<serde_json::Value>,
     },
 
@@ -69,6 +84,7 @@ pub enum HaAction {
         ha_url: String,
         event_type: String,
         #[serde(default)]
+        #[schemars(schema_with = "any_json_value_schema")]
         event_data: Option<serde_json::Value>,
     },
 
@@ -76,6 +92,7 @@ pub enum HaAction {
         ha_url: String,
         template: String,
         #[serde(default)]
+        #[schemars(schema_with = "any_json_value_schema")]
         variables: Option<serde_json::Value>,
         #[serde(default)]
         max_chars: Option<u32>,
@@ -135,6 +152,7 @@ pub enum HaAction {
         ha_url: String,
         entity_id: String,
         #[serde(default)]
+        #[schemars(schema_with = "any_json_value_schema")]
         variables: Option<serde_json::Value>,
     },
 
@@ -163,6 +181,7 @@ pub enum HaAction {
         hub: Option<String>,
         unit: u16,
         address: u16,
+        #[schemars(schema_with = "any_json_value_schema")]
         value: serde_json::Value,
         write_type: String,
     },
@@ -286,4 +305,60 @@ pub struct StatesResponse {
     /// "hard" when truncated by the server-side safety cap.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cap_kind: Option<&'static str>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HaAction;
+
+    /// Schemars 1 emits boolean schemas (`true`/`false`) for permissive
+    /// types like `serde_json::Value`. Several LLM tool-call parsers —
+    /// notably Ollama's `ToolFunctionParameters` — reject any boolean
+    /// schema under `properties.<key>` and expect a JSON object schema.
+    /// Walk the generated schema and assert every value under a
+    /// `properties` map is an object.
+    #[test]
+    fn schema_contains_no_boolean_property_schemas() {
+        let schema = schemars::schema_for!(HaAction);
+        let value = serde_json::to_value(&schema).expect("schema serializes");
+        let mut offenders = Vec::new();
+        check_no_bool_in_properties("$", &value, &mut offenders);
+        assert!(
+            offenders.is_empty(),
+            "boolean schemas under `properties` (Ollama-incompatible): {:#?}",
+            offenders
+        );
+    }
+
+    fn check_no_bool_in_properties(path: &str, v: &serde_json::Value, out: &mut Vec<String>) {
+        match v {
+            serde_json::Value::Object(map) => {
+                if let Some(serde_json::Value::Object(props)) = map.get("properties") {
+                    for (k, vv) in props {
+                        if vv.is_boolean() {
+                            out.push(format!("{}.properties.{}", path, k));
+                        } else {
+                            check_no_bool_in_properties(
+                                &format!("{}.properties.{}", path, k),
+                                vv,
+                                out,
+                            );
+                        }
+                    }
+                }
+                for (k, vv) in map {
+                    if k == "properties" {
+                        continue;
+                    }
+                    check_no_bool_in_properties(&format!("{}.{}", path, k), vv, out);
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for (i, vv) in arr.iter().enumerate() {
+                    check_no_bool_in_properties(&format!("{}[{}]", path, i), vv, out);
+                }
+            }
+            _ => {}
+        }
+    }
 }
