@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// remaining structurally an object.
 fn any_json_value_schema(_: &mut SchemaGenerator) -> Schema {
     schemars::json_schema!({
-        "description": "Any JSON value (boolean, number, string, array, or object).",
+        "description": "Any JSON value: boolean, integer, number, string, array, object, or null.",
         "type": ["boolean", "integer", "number", "string", "array", "object", "null"]
     })
 }
