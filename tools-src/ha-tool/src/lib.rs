@@ -14,10 +14,11 @@ static SCHEMA_CACHE: OnceLock<String> = OnceLock::new();
 
 const TOOL_DESCRIPTION: &str = "Control Home Assistant via REST API: states, services, \
 events, automations, scripts, scenes, MQTT, Modbus, templates, history, logs, calendars, \
-notifications, and reloads. `ha_url` (private/local URL) is required on every call. \
-Optional `ssh` on `check_config`, `get_error_log`, and `restart_ha` enables shell-backed \
-mode via the remote-shell extension. See the schema for per-action parameters; use \
-`get_states` with `compact: true` for cheap discovery.";
+notifications, config entries, and reloads. `ha_url` (private/local URL) is required on \
+every call. Optional `ssh` on `check_config`, `get_error_log`, and `restart_ha` enables \
+shell-backed mode via the remote-shell extension. See the schema for per-action parameters; \
+use `get_states` with `compact: true` for cheap discovery, `get_config_entries` to find \
+integration entry_ids for `reload_config_entry`.";
 
 struct HaTool;
 
@@ -156,6 +157,9 @@ fn execute_inner(params: &str) -> Result<String, String> {
         HaAction::ReloadThemes { ha_url } => api::reload_themes(&ha_url),
         HaAction::ReloadConfigEntry { ha_url, entry_id } => {
             api::reload_config_entry(&ha_url, &entry_id)
+        }
+        HaAction::GetConfigEntries { ha_url, domain } => {
+            api::get_config_entries(&ha_url, domain.as_deref())
         }
     }
 }

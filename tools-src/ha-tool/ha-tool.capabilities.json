@@ -19,7 +19,11 @@
       "mqtt_publish requires topic and payload",
       "modbus_write requires unit, address, value, and write_type (coil or holding); hub is optional for multi-hub setups",
       "reload_config_entry requires entry_id (the HA integration config entry id)",
-      "get_states accepts optional max_items (1..=500) to cap the entity list for small LLM context budgets (reduces context usage, not network traffic)",
+      "get_states accepts optional max_items (1..=5000), optional domain_filter (string or array), and optional compact (bool, default false) to return minimal entity projections",
+      "delete_state requires entity_id — removes a transient state from HA",
+      "render_template accepts optional variables (JSON object) and optional max_chars (default 8192, max 16384)",
+      "get_history and get_logbook accept optional start_time, end_time (ISO 8601), and hours_back (default 24)",
+      "get_config_entries accepts optional domain to filter by integration (e.g. domain=modbus); returns config entry objects with entry_id for use with reload_config_entry",
       "get_error_log accepts optional tail_lines (>=1) to return only the last N log lines (reduces LLM context usage, not network traffic, since HA has no server-side tail)"
     ],
     "notes": [
@@ -37,7 +41,8 @@
       {"action": "get_state", "ha_url": "http://homeassistant.local:8123", "entity_id": "light.living_room"},
       {"action": "call_service", "ha_url": "http://homeassistant.local:8123", "domain": "light", "service": "turn_on", "data": {"entity_id": "light.living_room", "brightness": 200}},
       {"action": "mqtt_publish", "ha_url": "http://homeassistant.local:8123", "topic": "home/sensor/temp", "payload": "22.5"},
-      {"action": "render_template", "ha_url": "http://homeassistant.local:8123", "template": "{{ states('sensor.temperature') }}"}
+      {"action": "render_template", "ha_url": "http://homeassistant.local:8123", "template": "{{ states('sensor.temperature') }}"},
+      {"action": "get_config_entries", "ha_url": "http://homeassistant.local:8123", "domain": "modbus"}
     ]
   },
   "http": {

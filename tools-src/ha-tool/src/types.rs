@@ -279,6 +279,12 @@ pub enum HaAction {
         ha_url: String,
         entry_id: String,
     },
+
+    GetConfigEntries {
+        ha_url: String,
+        #[serde(default)]
+        domain: Option<String>,
+    },
 }
 
 fn default_hours_back() -> u32 {

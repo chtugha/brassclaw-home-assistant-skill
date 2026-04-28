@@ -1,6 +1,6 @@
 ---
 name: home-assistant
-version: 0.3.1
+version: 0.3.2
 description: Control Home Assistant — lights, climate, switches, automations, scripts, scenes, MQTT, Modbus, and system management via ha-tool
 activation:
   keywords:
@@ -42,7 +42,7 @@ activation:
     - home-automation
     - iot
     - smarthome
-  max_context_tokens: 2500
+  max_context_tokens: 3000
 ---
 
 # Home Assistant via ha-tool
@@ -61,7 +61,7 @@ Every call requires `ha_url` (e.g. `http://homeassistant.local:8123`) — ask on
 
 **MQTT**: `mqtt_publish` (topic + payload, optional qos/retain)
 
-**Modbus**: `modbus_write` (unit + address + value + write_type coil|holding, optional hub)
+**Modbus**: `modbus_write` (unit + address + value + write_type coil|holding, optional hub). See **Modbus Workflows** below for register scanning, PDF import, and config management.
 
 **Templates**: `render_template` (Jinja2 template, optional variables/max_chars; default 8 KiB, max 16 KiB)
 
@@ -71,7 +71,7 @@ Every call requires `ha_url` (e.g. `http://homeassistant.local:8123`) — ask on
 
 **Notifications**: `get_notifications`, `dismiss_notification`. Send: `call_service` domain=`notify` service=`mobile_app_<name>`
 
-**System**: `check_config`, `get_error_log` (optional `tail_lines`), `restart_ha` (caution!), `reload_core_config`, `reload_automations`, `reload_scripts`, `reload_scenes`, `reload_themes`, `reload_config_entry` (requires entry_id)
+**System**: `check_config`, `get_error_log` (optional `tail_lines`), `restart_ha` (caution!), `reload_core_config`, `reload_automations`, `reload_scripts`, `reload_scenes`, `reload_themes`, `reload_config_entry` (requires entry_id), `get_config_entries` (optional `domain` filter — use to discover `entry_id` for `reload_config_entry`)
 
 ## Workflow
 
@@ -89,6 +89,84 @@ Pass `ssh` object (host, port, username, password or private_key_pem; optional s
 **Shell-only** (SSH required): `shell_status` (probe once/session), `shell_exec` (needs user confirmation), `shell_read_file`, `shell_write_file` (32 KiB cap), `shell_tail_file`, `ha_cli`
 
 **YAML workflow**: `shell_read_file` → modify → `shell_write_file` → `check_config` → `reload_automations`
+
+## Modbus Workflows (requires SSH)
+
+### 1. Scan a Modbus device for registers
+
+Use `shell_exec` to probe registers. Prefer `modpoll` (install: `pip install modpoll`). Fall back to Python `pymodbus` one-liners.
+
+**Holding registers** (function code 3 — the most common):
+```
+modpoll -m tcp -a <unit_id> -r <start> -c <count> -t 4 <host>:<port>
+```
+
+**Input registers** (function code 4):
+```
+modpoll -m tcp -a <unit_id> -r <start> -c <count> -t 3 <host>:<port>
+```
+
+**Coils** (function code 1, returns 0/1):
+```
+modpoll -m tcp -a <unit_id> -r <start> -c <count> -t 0 <host>:<port>
+```
+
+**Discrete inputs** (function code 2, read-only 0/1):
+```
+modpoll -m tcp -a <unit_id> -r <start> -c <count> -t 1 <host>:<port>
+```
+
+Pymodbus fallback (no install needed if HA uses pymodbus):
+```
+python3 -c "from pymodbus.client import ModbusTcpClient; c=ModbusTcpClient('<host>',<port>); c.connect(); r=c.read_holding_registers(<start>,<count>,slave=<unit_id>); print(r.registers if not r.isError() else r); c.close()"
+```
+
+Scan strategy: start with holding registers 0–99 in chunks of 50, then expand ranges based on responses. Registers that return errors are unimplemented — skip them.
+
+### 2. Import registers from a PDF / datasheet
+
+When the user provides a device PDF or register table:
+
+1. Parse the register table — extract: register address, name, data type (int16/uint16/int32/float32), read/write, scale factor, unit
+2. Map to HA Modbus YAML entries:
+   - `holding`/`input` register → `sensors:` entry (read) or `switches:`/`climate:` (write)
+   - `coil` → `switches:` or `binary_sensors:` entry
+   - `data_type`: int16, uint16, int32, uint32, float32, float64, string
+   - `scale`/`offset` for unit conversion (e.g. raw value × 0.1 = °C)
+   - `scan_interval` for poll frequency
+3. Generate the YAML stanzas
+4. Read existing config: `shell_read_file path=/config/configuration.yaml` (or the modbus include file)
+5. Merge new entries under the correct hub — never duplicate addresses
+6. Write back: `shell_write_file` → `check_config` → `reload_core_config`
+
+Example generated entry:
+```yaml
+modbus:
+  - name: hub1
+    type: tcp
+    host: 192.168.1.50
+    port: 502
+    sensors:
+      - name: "Inverter Power"
+        address: 100
+        input_type: holding
+        data_type: uint16
+        scale: 0.1
+        unit_of_measurement: "kW"
+        device_class: power
+        scan_interval: 30
+```
+
+### 3. Diagnose & fix Modbus errors
+
+1. `get_error_log tail_lines=100` — look for `Modbus` / `pymodbus` errors
+2. `get_config_entries domain=modbus` — get the hub's `entry_id`
+3. Common fixes:
+   - **Timeout / connection refused**: check host:port reachability via `shell_exec` (`nc -z <host> <port>`)
+   - **Illegal data address**: register doesn't exist on device — remove from config or fix address
+   - **Slave failure**: device overloaded — increase `scan_interval` or reduce register count
+   - **CRC error** (RTU): wiring/baud rate issue — check serial config
+4. After config edits: `check_config` → `reload_config_entry entry_id=<id>`
 
 ## HA MCP Server
 

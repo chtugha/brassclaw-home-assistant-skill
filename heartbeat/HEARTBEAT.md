@@ -38,11 +38,13 @@ No changes are made without your explicit confirmation.
       flag any automation whose `state` is `"unavailable"` or whose
       `attributes.last_triggered` is older than 30 days (possibly stuck).
 - [ ] `ha-tool get_states ha_url={{HA_URL}} domain_filter=binary_sensor` —
-      flag any `connectivity` / `problem` / `battery_low` sensor that is `on`.
+      flag any `problem` or `battery_low` sensor that is `on`, and any
+      `connectivity` sensor that is `off` (HA device class semantics:
+      connectivity sensors are `on` when connected, `off` when disconnected).
 - [ ] `ha-tool get_states ha_url={{HA_URL}} domain_filter=sensor` —
       flag any sensor in state `"unavailable"` or `"unknown"`.
-- [ ] `ha-tool get_states ha_url={{HA_URL}} domain_filter=update` —
-      flag any `update.*` entity whose state is `"on"` (update available).
+<!-- update domain scan removed from 30-min heartbeat — covered by the
+     weekly "ha-weekly-updates" routine in routines.md (too noisy here). -->
 
 ## Analysis & Proposal
 
@@ -73,9 +75,23 @@ corresponding `ha-tool` action with the stored params. Common remediations:
 - Config edits were made externally → `reload_core_config` / `reload_automations`
   / `reload_scripts` / `reload_scenes` / `reload_themes`.
 - Single integration is broken → `reload_config_entry entry_id=<id>`.
+  Use `get_config_entries domain=<integration>` to discover the `entry_id`.
 - Automation is stuck disabled → `toggle_automation entity_id=<id> enabled=true`.
 - Stale sensor from integration restart → `reload_config_entry` (preferred)
   or `restart_ha` (last resort, always ask twice).
+
+### Error-pattern → Action table
+
+| Log pattern / symptom | Likely cause | Remediation action |
+|---|---|---|
+| `Modbus.*timeout` / `Modbus.*connection` | Modbus hub lost contact | `get_config_entries domain=modbus` → `reload_config_entry entry_id=<id>` |
+| `MQTT.*disconnected` / `MQTT.*connection lost` | MQTT broker unreachable | `get_config_entries domain=mqtt` → `reload_config_entry entry_id=<id>` |
+| `Zigbee.*failed` / `ZHA.*error` | Zigbee coordinator issue | `get_config_entries domain=zha` → `reload_config_entry entry_id=<id>` |
+| `Z-Wave.*dead` / `Z-Wave.*timeout` | Z-Wave node or controller | `get_config_entries domain=zwave_js` → `reload_config_entry entry_id=<id>` |
+| `Setup.*failed.*<integration>` | Integration setup failure | `get_config_entries domain=<integration>` → `reload_config_entry` |
+| `Entity.*unavailable` (many at once) | Full integration outage | `get_config_entries` → identify domain → `reload_config_entry` |
+| `check_config` returns errors | YAML syntax / schema error | Show errors to user; suggest `shell_read_file` to inspect config |
+| Persistent notification present | HA system alert | Show to user; `dismiss_notification` after acknowledgement |
 
 ## Rate Limits
 
@@ -116,7 +132,7 @@ LLMs scan deeper. If unsure, use `standard`.
 ### standard (4k–16k context, default)
 - Run: `get_status`, `check_config`, `get_notifications`,
   `get_error_log tail_lines=40`.
-- Run state scans with `max_items=30` per domain (automation, sensor, update).
+- Run state scans with `max_items=30` per domain (automation, sensor, binary_sensor).
 - Summaries ≤ 120 tokens each; total budget ≤ 1024 tokens.
 
 ### full (≥ 32k context)

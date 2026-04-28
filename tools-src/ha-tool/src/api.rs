@@ -705,6 +705,17 @@ pub fn reload_themes(base: &str) -> Result<String, String> {
     call_service(base, "frontend", "reload_themes", None)
 }
 
+pub fn get_config_entries(base: &str, domain: Option<&str>) -> Result<String, String> {
+    if let Some(d) = domain {
+        validate_domain(d)?;
+    }
+    let path = match domain {
+        Some(d) => format!("/api/config/config_entries/entry?domain={}", url_encode(d)),
+        None => "/api/config/config_entries/entry".to_string(),
+    };
+    ha_get(base, &path)
+}
+
 pub fn reload_config_entry(base: &str, entry_id: &str) -> Result<String, String> {
     validate_not_empty(entry_id, "entry_id")?;
     if entry_id.len() > MAX_ENTITY_ID_LEN {
@@ -941,6 +952,14 @@ mod tests {
         let out = truncate_template_output(s, 1);
         // We retained zero bytes of content, then appended the marker.
         assert!(out.starts_with("\n…[truncated, 2 more bytes"));
+    }
+
+    #[test]
+    fn test_get_config_entries_domain_validation() {
+        let base = "http://192.168.1.1:8123";
+        assert!(get_config_entries(base, Some("bad.domain")).is_err());
+        assert!(get_config_entries(base, Some("bad domain")).is_err());
+        assert!(get_config_entries(base, Some("")).is_err());
     }
 
     #[test]
