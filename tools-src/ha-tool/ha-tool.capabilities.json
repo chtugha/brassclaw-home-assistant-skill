@@ -1,9 +1,10 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "wit_version": "0.3.0",
-  "description": "Control Home Assistant: read/write entity states, call services, manage automations/scripts/scenes, publish MQTT, control Modbus, render templates, view history/logbook, and manage the HA system. Every call requires ha_url (the base URL of the HA instance).",
+  "description": "Control Home Assistant: read/write entity states, call services, manage automations/scripts/scenes, publish MQTT, control Modbus, render templates, view history/logbook, config entries, and manage the HA system. REST actions require ha_url; shell-only actions require ssh.",
   "discovery_summary": {
-    "always_required": ["action", "ha_url"],
+    "always_required": ["action"],
+    "mostly_required": "ha_url is required on all REST actions; shell-only actions (shell_status, shell_exec, shell_read_file, shell_write_file, shell_tail_file, ha_cli) require ssh instead",
     "conditional_requirements": [
       "get_state requires entity_id",
       "set_state requires entity_id and state",
@@ -17,7 +18,7 @@
       "run_script requires entity_id",
       "activate_scene requires entity_id",
       "mqtt_publish requires topic and payload",
-      "modbus_write requires unit, address, value, and write_type (coil or holding); hub is optional for multi-hub setups",
+      "modbus_write requires unit, address, value, and write_type (coil or holding); value can be a single value or array for multi-register/coil writes; hub is optional for multi-hub setups",
       "reload_config_entry requires entry_id (the HA integration config entry id)",
       "get_states accepts optional max_items (1..=5000), optional domain_filter (string or array), and optional compact (bool, default false) to return minimal entity projections",
       "delete_state requires entity_id — removes a transient state from HA",

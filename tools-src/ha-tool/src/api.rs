@@ -611,14 +611,32 @@ pub fn modbus_write(base: &str, hub: Option<&str>, unit: u16, address: u16, valu
     }
     match write_type {
         "coil" => {
-            if !value.is_boolean() {
-                return Err("value must be boolean for coil writes".into());
+            if value.is_boolean() {
+                // single coil write
+            } else if let Some(arr) = value.as_array() {
+                if arr.is_empty() {
+                    return Err("value array must not be empty for coil writes".into());
+                }
+                if !arr.iter().all(|v| v.is_boolean()) {
+                    return Err("value array elements must all be booleans for coil writes".into());
+                }
+            } else {
+                return Err("value must be a boolean or array of booleans for coil writes".into());
             }
             call_service(base, "modbus", "write_coil", Some(&svc_data))
         }
         "holding" => {
-            if !value.is_number() {
-                return Err("value must be a number for holding register writes".into());
+            if value.is_number() {
+                // single register write
+            } else if let Some(arr) = value.as_array() {
+                if arr.is_empty() {
+                    return Err("value array must not be empty for holding register writes".into());
+                }
+                if !arr.iter().all(|v| v.is_number()) {
+                    return Err("value array elements must all be numbers for holding register writes".into());
+                }
+            } else {
+                return Err("value must be a number or array of numbers for holding register writes".into());
             }
             call_service(base, "modbus", "write_register", Some(&svc_data))
         }
@@ -663,6 +681,13 @@ pub fn get_error_log(
         shell::tail_file(cfg, path, lines)
     })? {
         return Ok(out);
+    }
+    if log_path.is_some() {
+        host::log(
+            host::LogLevel::Warn,
+            "log_path ignored: REST API /api/error_log always returns the default log. \
+             Pass ssh to use a custom log_path via shell.",
+        );
     }
     let full = ha_get(base, "/api/error_log")?;
     if let Some(n) = tail_lines {
@@ -952,6 +977,22 @@ mod tests {
         let out = truncate_template_output(s, 1);
         // We retained zero bytes of content, then appended the marker.
         assert!(out.starts_with("\n…[truncated, 2 more bytes"));
+    }
+
+    #[test]
+    fn test_modbus_write_value_validation() {
+        let base = "http://192.168.1.1:8123";
+        assert!(modbus_write(base, None, 1, 0, &serde_json::json!("string"), "coil").is_err());
+        assert!(modbus_write(base, None, 1, 0, &serde_json::json!(42), "coil").is_err());
+        assert!(modbus_write(base, None, 1, 0, &serde_json::json!([true, 42]), "coil").is_err());
+        assert!(modbus_write(base, None, 1, 0, &serde_json::json!([]), "coil").is_err());
+
+        assert!(modbus_write(base, None, 1, 0, &serde_json::json!("string"), "holding").is_err());
+        assert!(modbus_write(base, None, 1, 0, &serde_json::json!(true), "holding").is_err());
+        assert!(modbus_write(base, None, 1, 0, &serde_json::json!([1, "two"]), "holding").is_err());
+        assert!(modbus_write(base, None, 1, 0, &serde_json::json!([]), "holding").is_err());
+
+        assert!(modbus_write(base, None, 1, 0, &serde_json::json!(42), "invalid").is_err());
     }
 
     #[test]
