@@ -47,7 +47,7 @@ activation:
 
 # Home Assistant via ha-tool
 
-Every call requires `ha_url` (e.g. `http://homeassistant.local:8123`) — ask once, reuse. Must be private/local: localhost, 192.168.*, 10.*, 172.16-31.*, *.local, *.lan, *.home, *.duckdns.org, *.nabu.casa.
+Every call requires `ha_url` — ask once, reuse. The sandbox enforces **HTTPS and public hostnames**: use `https://<id>.ui.nabu.casa` (Home Assistant Cloud) or a public DuckDNS/custom domain with TLS. Local HTTP instances (`192.168.*`, `*.local`, `http://`) cannot be reached via REST — use the SSH shell path instead.
 
 ## Actions
 
