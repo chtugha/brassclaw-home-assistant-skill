@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
+  "version": "0.3.1",
   "wit_version": "0.3.0",
   "description": "Control Home Assistant: read/write entity states, call services, manage automations/scripts/scenes, publish MQTT, control Modbus, render templates, view history/logbook, config entries, and manage the HA system. REST actions require ha_url; shell-only actions require ssh.",
   "discovery_summary": {
@@ -28,7 +28,7 @@
       "get_error_log accepts optional tail_lines (>=1) to return only the last N log lines (reduces LLM context usage, not network traffic, since HA has no server-side tail)"
     ],
     "notes": [
-      "ha_url is required on every call — ask the user for their Home Assistant URL if unknown.",
+      "ha_url is required on every REST call — ask the user for their Home Assistant URL if unknown. Most local HA instances use http:// (not https://).",
       "Use get_states with domain_filter to discover entity IDs.",
       "Use get_services to discover available service domains and names.",
       "MQTT: use mqtt_publish or call_service(mqtt, publish).",
@@ -46,33 +46,37 @@
       {"action": "get_config_entries", "ha_url": "http://homeassistant.local:8123", "domain": "modbus"}
     ]
   },
-  "http": {
-    "allowlist": [
-      {
-        "host": "*",
-        "path_prefix": "/api/",
-        "methods": ["GET", "POST", "PUT", "DELETE"]
-      }
-    ],
-    "credentials": {
-      "ha_token": {
-        "secret_name": "ha_token",
-        "location": { "type": "bearer" },
-        "host_patterns": ["*"]
-      }
+  "capabilities": {
+    "http": {
+      "allowlist": [
+        {
+          "host": "*",
+          "schemes": ["http", "https"],
+          "allow_http": true,
+          "path_prefix": "/api/",
+          "methods": ["GET", "POST", "PUT", "DELETE"]
+        }
+      ],
+      "credentials": {
+        "ha_token": {
+          "secret_name": "ha_token",
+          "location": { "type": "bearer" },
+          "host_patterns": ["*"]
+        }
+      },
+      "rate_limit": {
+        "requests_per_minute": 120,
+        "requests_per_hour": 3600
+      },
+      "timeout_secs": 30
     },
-    "rate_limit": {
-      "requests_per_minute": 120,
-      "requests_per_hour": 3600
+    "secrets": {
+      "allowed_names": ["ha_token"]
     },
-    "timeout_secs": 30
-  },
-  "secrets": {
-    "allowed_names": ["ha_token"]
-  },
-  "tool_invoke": {
-    "aliases": {
-      "remote-shell": "remote-shell"
+    "tool_invoke": {
+      "aliases": {
+        "remote-shell": "remote-shell"
+      }
     }
   },
   "auth": {

@@ -12,12 +12,14 @@ wit_bindgen::generate!({
 
 static SCHEMA_CACHE: OnceLock<String> = OnceLock::new();
 
-const TOOL_DESCRIPTION: &str = "Control Home Assistant via REST API: states, services, \
-events, automations, scripts, scenes, MQTT, Modbus, templates, history, logs, calendars, \
-notifications, config entries, and reloads. `ha_url` (private/local URL) is required on \
-every call. Optional `ssh` on `check_config`, `get_error_log`, and `restart_ha` enables \
-shell-backed mode via the remote-shell extension. See the schema for per-action parameters; \
-use `get_states` with `compact: true` for cheap discovery, `get_config_entries` to find \
+const TOOL_DESCRIPTION: &str = "Control Home Assistant via REST API. \
+The `action` field selects the operation — use logical names like `get_state`, `call_service`, \
+`mqtt_publish` (NOT HTTP method names like GET/POST). `ha_url` (http:// or https://) is required \
+on every REST call; most local HA instances use http://. Optional `ssh` on `check_config`, \
+`get_error_log`, and `restart_ha` enables shell-backed mode via the remote-shell extension. \
+Supports: states, services, events, automations, scripts, scenes, MQTT, Modbus, templates, \
+history, logs, calendars, notifications, config entries, and reloads. \
+Use `get_states` with `compact: true` for cheap discovery, `get_config_entries` to find \
 integration entry_ids for `reload_config_entry`.";
 
 struct HaTool;
