@@ -81,7 +81,7 @@
     "secret_name": "ha_token",
     "display_name": "Home Assistant",
     "instructions": "Create a long-lived access token in Home Assistant:\n1. Open your HA instance in a browser\n2. Go to your Profile page (click your name in the sidebar)\n3. Scroll to 'Long-Lived Access Tokens'\n4. Click 'Create Token', give it a name, and copy the token",
-    "setup_url": "http://homeassistant.local:8123/profile",
+    "setup_url": "https://my.home-assistant.io/redirect/profile/",
     "token_hint": "Long-lived access token (starts with 'ey')",
     "env_var": "HA_TOKEN"
   }

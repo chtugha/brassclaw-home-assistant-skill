@@ -71,9 +71,10 @@ fn validate_ha_url(ha_url: &str) -> Result<(), String> {
         || host_no_port.ends_with(".nabu.casa");
     if !is_private {
         return Err(format!(
-            "ha_url host '{}' is not a recognized private/local address. \
-             Allowed: localhost, 127.0.0.1, 192.168.*, 10.*, 172.16-31.*, \
-             *.local, *.internal, *.lan, *.home, *.duckdns.org, *.nabu.casa",
+            "ha_url host '{}' is not a recognized Home Assistant address. \
+             Accepted: *.nabu.casa, *.duckdns.org (public HTTPS — work through REST); \
+             localhost, 192.168.*, 10.*, 172.16-31.*, *.local, *.lan, *.home \
+             (local — sandbox blocks these for REST; use the SSH shell path instead)",
             host_no_port
         ));
     }

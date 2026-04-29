@@ -14,9 +14,11 @@ static SCHEMA_CACHE: OnceLock<String> = OnceLock::new();
 
 const TOOL_DESCRIPTION: &str = "Control Home Assistant via REST API. \
 The `action` field selects the operation — use logical names like `get_state`, `call_service`, \
-`mqtt_publish` (NOT HTTP method names like GET/POST). `ha_url` (http:// or https://) is required \
-on every REST call; most local HA instances use http://. Optional `ssh` on `check_config`, \
-`get_error_log`, and `restart_ha` enables shell-backed mode via the remote-shell extension. \
+`mqtt_publish` (NOT HTTP method names like GET/POST). `ha_url` must be HTTPS with a publicly \
+reachable hostname (e.g. https://<id>.ui.nabu.casa or a public DuckDNS domain) — the sandbox \
+enforces HTTPS and blocks private/local IPs; for local http:// instances use the SSH shell path. \
+Optional `ssh` on `check_config`, `get_error_log`, and `restart_ha` enables shell-backed mode \
+via the remote-shell extension. \
 Supports: states, services, events, automations, scripts, scenes, MQTT, Modbus, templates, \
 history, logs, calendars, notifications, config entries, and reloads. \
 Use `get_states` with `compact: true` for cheap discovery, `get_config_entries` to find \
