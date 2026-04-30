@@ -1,5 +1,4 @@
 mod api;
-mod shell;
 mod types;
 
 use std::sync::OnceLock;
@@ -16,11 +15,9 @@ const TOOL_DESCRIPTION: &str = "Control Home Assistant via REST API. \
 The `action` field selects the operation — use logical names like `get_state`, `call_service`, \
 `mqtt_publish` (NOT HTTP method names like GET/POST). `ha_url` must be HTTPS with a publicly \
 reachable hostname (e.g. https://<id>.ui.nabu.casa or a public DuckDNS domain) — the sandbox \
-enforces HTTPS and blocks private/local IPs. IMPORTANT: for local http:// HA instances, \
-do NOT use this tool at all — use the native `shell` tool with `curl` to call the HA REST API \
-directly (e.g. shell: curl -s -H 'Authorization: Bearer TOKEN' http://192.168.1.100:8123/api/states). \
-ha-tool's shell actions (shell_exec, ha_cli, etc.) also fail for local instances because they use \
-WASM-to-WASM tool_invoke which is equally sandbox-restricted. \
+enforces HTTPS and blocks private/local IPs. For local http:// HA instances, do NOT use this \
+tool — use the native `shell` tool with `curl` instead \
+(e.g. curl -s -H 'Authorization: Bearer TOKEN' http://192.168.1.100:8123/api/states). \
 Supports: states, services, events, automations, scripts, scenes, MQTT, Modbus, templates, \
 history, logs, calendars, notifications, config entries, and reloads. \
 Use `get_states` with `compact: true` for cheap discovery, `get_config_entries` to find \
@@ -141,21 +138,11 @@ fn execute_inner(params: &str) -> Result<String, String> {
         HaAction::DismissNotification { ha_url, notification_id } => {
             api::dismiss_notification(&ha_url, &notification_id)
         }
-        HaAction::CheckConfig { ha_url, ssh } => api::check_config(&ha_url, ssh.as_ref()),
-        HaAction::GetErrorLog { ha_url, tail_lines, ssh, log_path } => {
-            api::get_error_log(&ha_url, tail_lines, ssh.as_ref(), log_path.as_deref())
+        HaAction::CheckConfig { ha_url } => api::check_config(&ha_url),
+        HaAction::GetErrorLog { ha_url, tail_lines } => {
+            api::get_error_log(&ha_url, tail_lines)
         }
-        HaAction::RestartHa { ha_url, ssh } => api::restart_ha(&ha_url, ssh.as_ref()),
-        HaAction::ShellStatus { gateway_port } => shell::shell_status(gateway_port),
-        HaAction::ShellExec { ssh, command, timeout_secs } => {
-            shell::shell_exec(&ssh, &command, timeout_secs)
-        }
-        HaAction::ShellReadFile { ssh, path } => shell::read_file(&ssh, &path),
-        HaAction::ShellWriteFile { ssh, path, content } => {
-            shell::write_file(&ssh, &path, &content)
-        }
-        HaAction::ShellTailFile { ssh, path, lines } => shell::tail_file(&ssh, &path, lines),
-        HaAction::HaCli { ssh, args } => shell::ha_cli(&ssh, &args),
+        HaAction::RestartHa { ha_url } => api::restart_ha(&ha_url),
         HaAction::ReloadCoreConfig { ha_url } => api::reload_core_config(&ha_url),
         HaAction::ReloadAutomations { ha_url } => api::reload_automations(&ha_url),
         HaAction::ReloadScripts { ha_url } => api::reload_scripts(&ha_url),

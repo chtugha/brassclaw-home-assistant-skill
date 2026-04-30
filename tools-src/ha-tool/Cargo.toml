@@ -1,6 +1,6 @@
 [package]
 name = "ha-tool"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 description = "Home Assistant integration tool for IronClaw (WASM component)"
 license = "MIT OR Apache-2.0"

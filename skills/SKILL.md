@@ -1,6 +1,6 @@
 ---
 name: home-assistant
-version: 0.4.1
+version: 0.5.0
 description: Control Home Assistant — lights, climate, switches, automations, scripts, scenes, MQTT, Modbus, and system management via ha-tool
 activation:
   keywords:
@@ -42,18 +42,14 @@ activation:
     - home-automation
     - iot
     - smarthome
-  max_context_tokens: 3000
+  max_context_tokens: 2500
 ---
 
 # Home Assistant via ha-tool
 
 Every call requires `ha_url` — ask once, reuse. The sandbox enforces **HTTPS and public hostnames**: use `https://<id>.ui.nabu.casa` (Home Assistant Cloud) or a public DuckDNS/custom domain with TLS.
 
-**IMPORTANT — Local HTTP instances** (`192.168.*`, `*.local`, `http://`): ha-tool **cannot reach these at all** — neither REST nor shell actions work because the sandbox blocks both the HTTP request and the WASM-to-WASM `tool_invoke` to remote-shell. Instead, use the native `shell` tool directly with `curl`:
-```
-shell: curl -s -H "Authorization: Bearer $HA_TOKEN" http://192.168.1.100:8123/api/states
-```
-See **Local HA via shell+curl** section below for the full pattern.
+**Local HTTP instances** (`192.168.*`, `*.local`, `http://`): ha-tool **cannot reach these** — the sandbox blocks HTTP and private IPs. Use the native `shell` tool with `curl` instead (see **Local HA via shell+curl** below).
 
 ## Actions
 
@@ -86,21 +82,9 @@ See **Local HA via shell+curl** section below for the full pattern.
 3. **History**: always pass `start_time`/`end_time` or `hours_back` to avoid pulling full history.
 4. **Templates**: use `render_template` for complex server-side conditions.
 
-## Shell Access via ha-tool (public HTTPS only)
-
-ha-tool's shell actions (`shell_exec`, `shell_read_file`, `shell_write_file`, `shell_tail_file`, `ha_cli`) use WASM-to-WASM `tool_invoke("remote-shell")` internally. **This only works when the remote-shell gateway is reachable from the sandbox** — which requires HTTPS + public hostname, same as REST actions. For local HA instances, these actions will fail; use `shell` + `curl` instead (see below).
-
-Pass `ssh` object (host, port, username, password or private_key_pem; optional session_id/gateway_port/insecure_ignore_host_key).
-
-**REST+Shell** (SSH optional, auto-fallback to REST): `check_config`, `get_error_log`, `restart_ha`
-
-**Shell-only** (SSH required): `shell_status` (probe once/session), `shell_exec` (needs user confirmation), `shell_read_file`, `shell_write_file` (32 KiB cap), `shell_tail_file`, `ha_cli`
-
-**YAML workflow**: `shell_read_file` → modify → `shell_write_file` → `check_config` → `reload_automations`
-
 ## Local HA via shell+curl (when ha-tool cannot reach HA)
 
-When HA is on a local/private network (`http://`, `192.168.*`, `*.local`), **do not use ha-tool** for REST or shell actions. Instead, call the HA REST API directly via the native `shell` tool:
+When HA is on a local/private network (`http://`, `192.168.*`, `*.local`), **do not use ha-tool**. Instead, call the HA REST API directly via the native `shell` tool:
 
 ```
 shell: curl -s -H "Authorization: Bearer <TOKEN>" http://<HA_IP>:8123/api/<endpoint>
@@ -120,11 +104,11 @@ shell: curl -s -H "Authorization: Bearer <TOKEN>" http://<HA_IP>:8123/api/<endpo
 
 Ask the user for `HA_IP`, `PORT`, and `TOKEN` once, then reuse across all calls.
 
-## Modbus Workflows (requires SSH)
+## Modbus Workflows
 
 ### 1. Scan a Modbus device for registers
 
-Use `shell_exec` to probe registers. Prefer `modpoll` (install: `pip install modpoll`). Fall back to Python `pymodbus` one-liners.
+Use the native `shell` tool via SSH to probe registers. Prefer `modpoll` (install: `pip install modpoll`). Fall back to Python `pymodbus` one-liners.
 
 **Holding registers** (function code 3 — the most common):
 ```
@@ -165,9 +149,9 @@ When the user provides a device PDF or register table:
    - `scale`/`offset` for unit conversion (e.g. raw value × 0.1 = °C)
    - `scan_interval` for poll frequency
 3. Generate the YAML stanzas
-4. Read existing config: `shell_read_file path=/config/configuration.yaml` (or the modbus include file)
+4. Read existing config: `ssh user@HA cat /config/configuration.yaml` (or the modbus include file)
 5. Merge new entries under the correct hub — never duplicate addresses
-6. Write back: `shell_write_file` → `check_config` → `reload_core_config`
+6. Write back via SSH → `check_config` → `reload_core_config`
 
 Example generated entry:
 ```yaml
@@ -192,7 +176,7 @@ modbus:
 1. `get_error_log tail_lines=100` — look for `Modbus` / `pymodbus` errors
 2. `get_config_entries domain=modbus` — get the hub's `entry_id`
 3. Common fixes:
-   - **Timeout / connection refused**: check host:port reachability via `shell_exec` (`nc -z <host> <port>`)
+   - **Timeout / connection refused**: check host:port reachability via `shell` (`ssh user@HA nc -z <host> <port>`)
    - **Illegal data address**: register doesn't exist on device — remove from config or fix address
    - **Slave failure**: device overloaded — increase `scan_interval` or reduce register count
    - **CRC error** (RTU): wiring/baud rate issue — check serial config

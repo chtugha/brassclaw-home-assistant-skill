@@ -9,6 +9,11 @@ Ready-to-use prompts for creating scheduled monitoring jobs. Copy any
 prompt below, paste it into `ironclaw chat`, and the agent will set up
 the cron routine for you.
 
+**Note:** All routines below use `ha-tool` syntax. If your HA URL is
+local/HTTP (not public HTTPS), the agent must substitute each `ha-tool`
+call with the equivalent `curl` command via the native `shell` tool
+(see SKILL.md "Local HA via shell+curl" for the mapping).
+
 ## 1. Hourly health check
 
 ```

@@ -1,4 +1,3 @@
-use crate::shell::SshConfig;
 use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::{Deserialize, Serialize};
 
@@ -201,58 +200,16 @@ pub enum HaAction {
 
     CheckConfig {
         ha_url: String,
-        #[serde(default)]
-        ssh: Option<SshConfig>,
     },
 
     GetErrorLog {
         ha_url: String,
         #[serde(default)]
         tail_lines: Option<u32>,
-        #[serde(default)]
-        ssh: Option<SshConfig>,
-        #[serde(default)]
-        log_path: Option<String>,
     },
 
     RestartHa {
         ha_url: String,
-        #[serde(default)]
-        ssh: Option<SshConfig>,
-    },
-
-    ShellStatus {
-        #[serde(default)]
-        gateway_port: Option<u16>,
-    },
-
-    ShellExec {
-        ssh: SshConfig,
-        command: String,
-        #[serde(default)]
-        timeout_secs: Option<u32>,
-    },
-
-    ShellReadFile {
-        ssh: SshConfig,
-        path: String,
-    },
-
-    ShellWriteFile {
-        ssh: SshConfig,
-        path: String,
-        content: String,
-    },
-
-    ShellTailFile {
-        ssh: SshConfig,
-        path: String,
-        lines: u32,
-    },
-
-    HaCli {
-        ssh: SshConfig,
-        args: String,
     },
 
     ReloadCoreConfig {

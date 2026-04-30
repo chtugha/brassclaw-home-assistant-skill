@@ -170,16 +170,11 @@ Open `~/.ironclaw/routines.md`, copy any routine prompt, paste it into a chat se
 
 ---
 
-## Optional: SSH Shell Access
+## Local HA Instances
 
-If you install the [ironclaw-remote-shell-extension](https://github.com/nearai/ironclaw) (see the IronClaw docs for available extensions), `ha-tool` gains direct shell access to your HA host:
+The IronClaw sandbox enforces HTTPS + public hostnames for WASM tool HTTP requests. For local HA instances (`http://`, `192.168.*`, `*.local`), ha-tool cannot reach the HA API. Instead, the agent uses the native `shell` tool with `curl` to call the HA REST API directly — no sandbox restrictions apply to native tools.
 
-- Run arbitrary commands (`shell_exec`)
-- Read and write files (`shell_read_file`, `shell_write_file`)
-- Run HA supervisor CLI commands (`ha_cli`)
-- Edit YAML configs and reload without restart
-
-Actions like `check_config`, `get_error_log`, and `restart_ha` automatically prefer SSH when available and fall back to REST when it's not.
+For public HTTPS access, run `bash scripts/setup-duckdns.sh` to configure DuckDNS + Let's Encrypt on your HA instance.
 
 ---
 
@@ -211,12 +206,12 @@ Actions like `check_config`, `get_error_log`, and `restart_ha` automatically pre
 ironclaw-home-assistant-skill/
 ├── scripts/
 │   ├── install.sh          # Interactive installer (run this)
+│   ├── setup-duckdns.sh    # DuckDNS + Let's Encrypt HTTPS setup
 │   └── build.sh            # Standalone build script (for development)
 ├── tools-src/ha-tool/      # Rust WASM source code
 │   ├── src/
 │   │   ├── lib.rs          # Entry point, action dispatcher
 │   │   ├── api.rs          # HA REST API calls
-│   │   ├── shell.rs        # SSH shell operations
 │   │   └── types.rs        # Data types and JSON schema
 │   └── Cargo.toml
 ├── skills/SKILL.md          # AI skill hint (installed to ~/.ironclaw/skills/home-assistant/SKILL.md)

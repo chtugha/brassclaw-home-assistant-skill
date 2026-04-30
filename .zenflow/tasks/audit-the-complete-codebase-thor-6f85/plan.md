@@ -43,3 +43,26 @@ Verified IronClaw upstream source (`staging` branch) for both host matching func
 - [x] Integrated HTTPS setup recommendation into `install.sh` post-install output (shown when HA URL is local/HTTP)
 - Script flow: prompts for HA URL + token + DuckDNS subdomain + token → checks Supervisor availability → installs add-on → configures domain + Let's Encrypt → starts add-on → saves new HTTPS URL
 - Falls back to certbot instructions for non-HA-OS installs
+
+### [x] Step: Necessity audit — remove dead shell code (v0.5.0)
+
+Assessed every component for necessity given the sandbox architecture: WASM tools cannot reach local HA instances (sandbox blocks HTTP + private IPs), and the `tool_invoke("remote-shell")` path is equally blocked (WASM-to-WASM HTTP to localhost:9022). Only two paths work: (1) ha-tool REST for public HTTPS HA, (2) native `shell` tool + `curl` for local HA.
+
+**Removed (833 lines of dead code):**
+- [x] Deleted `shell.rs` entirely (721 lines) — SshConfig, try_shell, try_shell_strict, ensure_session, parse_connect_response, shell_exec, parse_exec_output, read_file, write_file, tail_file, ha_cli, shell_status, is_shell_available, b64_encode, validate_path, is_sandbox_error, all 19 shell tests
+- [x] Removed 6 shell-only action variants from types.rs: ShellStatus, ShellExec, ShellReadFile, ShellWriteFile, ShellTailFile, HaCli
+- [x] Removed SSH fallback from check_config, get_error_log, restart_ha in api.rs — now pure REST
+- [x] Removed SshConfig fields from CheckConfig, GetErrorLog, RestartHa action variants
+- [x] Removed `tool_invoke` section from capabilities.json (remote-shell alias no longer needed)
+- [x] Removed "Shell Access via ha-tool" section from SKILL.md
+- [x] Removed stale log_path warning and DEFAULT_HA_LOG_PATH/DEFAULT_SHELL_TAIL_LINES constants
+
+**Updated:**
+- [x] capabilities.json: simplified description, discovery_summary, and notes
+- [x] SKILL.md: removed shell-via-ha-tool docs, updated Modbus workflows to reference native shell+SSH, reduced max_context_tokens 3000→2500
+- [x] HEARTBEAT.md: replaced shell_read_file reference with SSH
+- [x] lib.rs TOOL_DESCRIPTION: simplified, removed shell action references
+- [x] install.sh: updated post-install message (native shell+curl, not SSH shell path)
+- [x] README.md: replaced SSH Shell Access section with Local HA Instances section, updated project structure (removed shell.rs, added setup-duckdns.sh)
+- [x] Version bump: 0.4.1 → 0.5.0 across Cargo.toml, capabilities.json, SKILL.md
+- [x] All 23 tests pass, WASM build succeeds (471.8 KiB)

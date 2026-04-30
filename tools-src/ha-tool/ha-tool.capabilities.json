@@ -1,10 +1,10 @@
 {
-  "version": "0.4.1",
+  "version": "0.5.0",
   "wit_version": "0.3.0",
-  "description": "Control Home Assistant: read/write entity states, call services, manage automations/scripts/scenes, publish MQTT, control Modbus, render templates, view history/logbook, config entries, and manage the HA system. REST actions require ha_url; shell-only actions require ssh.",
+  "description": "Control Home Assistant via REST API: read/write entity states, call services, manage automations/scripts/scenes, publish MQTT, control Modbus, render templates, view history/logbook, config entries, and manage the HA system. Requires HTTPS + public hostname (sandbox enforced). For local HA, use native shell+curl.",
   "discovery_summary": {
     "always_required": ["action"],
-    "mostly_required": "ha_url is required on all REST actions (HTTPS + public hostname only); shell actions (shell_status, shell_exec, shell_read_file, shell_write_file, shell_tail_file, ha_cli) require ssh but also need sandbox-reachable gateway — for local HA, use native shell+curl instead",
+    "mostly_required": "ha_url is required on every action (HTTPS + public hostname only — sandbox enforces this). For local HA, use native shell+curl instead of ha-tool",
     "conditional_requirements": [
       "get_state requires entity_id",
       "set_state requires entity_id and state",
@@ -28,13 +28,12 @@
       "get_error_log accepts optional tail_lines (>=1) to return only the last N log lines (reduces LLM context usage, not network traffic, since HA has no server-side tail)"
     ],
     "notes": [
-      "ha_url must be HTTPS and publicly reachable — the sandbox enforces HTTPS and blocks private/local IPs. Use Nabu Casa (https://<id>.ui.nabu.casa) or a public DuckDNS/custom domain. IMPORTANT: for local HTTP instances (192.168.*, *.local), do NOT use ha-tool at all — neither REST nor shell actions work (sandbox blocks both). Use the native `shell` tool with `curl` instead (e.g. shell: curl -s -H 'Authorization: Bearer TOKEN' http://HA:8123/api/states).",
-      "Use get_states with domain_filter to discover entity IDs.",
-      "Use get_services to discover available service domains and names.",
-      "MQTT: use mqtt_publish or call_service(mqtt, publish).",
-      "Modbus: use modbus_write or call_service(modbus, write_register/write_coil).",
-      "restart_ha restarts the Home Assistant instance — use with caution.",
-      "reload_* actions apply YAML edits without a full restart (reload_core_config, reload_automations, reload_scripts, reload_scenes, reload_themes, reload_config_entry)."
+      "ha_url must be HTTPS with a public hostname — sandbox enforces this. Use Nabu Casa (https://<id>.ui.nabu.casa) or DuckDNS. For local HTTP HA, do NOT use ha-tool — use native `shell` tool with `curl` instead.",
+      "Use get_states with domain_filter + compact to discover entity IDs.",
+      "MQTT: mqtt_publish or call_service(mqtt, publish).",
+      "Modbus: modbus_write or call_service(modbus, write_register/write_coil).",
+      "restart_ha restarts HA — use with caution.",
+      "reload_* actions apply YAML edits without a full restart."
     ],
     "examples": [
       {"action": "get_states", "ha_url": "https://<id>.ui.nabu.casa"},
@@ -75,11 +74,6 @@
     },
     "secrets": {
       "allowed_names": ["ha_token"]
-    },
-    "tool_invoke": {
-      "aliases": {
-        "remote-shell": "remote-shell"
-      }
     }
   },
   "auth": {

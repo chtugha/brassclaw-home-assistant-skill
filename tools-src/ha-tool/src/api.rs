@@ -1,5 +1,4 @@
 use crate::near::agent::host;
-use crate::shell::{self, SshConfig};
 use crate::types::StatesResponse;
 
 const MAX_STATES: usize = 5000;
@@ -11,8 +10,6 @@ const MAX_TEMPLATE_LEN: usize = 65_536;
 const MAX_TEMPLATE_OUT_BYTES: u32 = 16_384;
 const DEFAULT_TEMPLATE_OUT_BYTES: u32 = 8_192;
 const MAX_MQTT_TOPIC_LEN: usize = 65_535;
-const DEFAULT_HA_LOG_PATH: &str = "/config/home-assistant.log";
-const DEFAULT_SHELL_TAIL_LINES: u32 = 200;
 const MS_PER_SECOND: u64 = 1000;
 const SECONDS_PER_MINUTE: u64 = 60;
 const SECONDS_PER_HOUR: u64 = 3600;
@@ -72,9 +69,9 @@ fn validate_ha_url(ha_url: &str) -> Result<(), String> {
     if !is_private {
         return Err(format!(
             "ha_url host '{}' is not a recognized Home Assistant address. \
-             Accepted: *.nabu.casa, *.duckdns.org (public HTTPS — work through REST); \
+             Accepted: *.nabu.casa, *.duckdns.org (public HTTPS — work through ha-tool REST); \
              localhost, 192.168.*, 10.*, 172.16-31.*, *.local, *.lan, *.home \
-             (local — sandbox blocks these for REST; use the SSH shell path instead)",
+             (local — sandbox blocks these; use native `shell` tool with `curl` instead)",
             host_no_port
         ));
     }
@@ -657,38 +654,18 @@ pub fn dismiss_notification(base: &str, notification_id: &str) -> Result<String,
     call_service(base, "persistent_notification", "dismiss", Some(&serde_json::json!({"notification_id": notification_id})))
 }
 
-pub fn check_config(base: &str, ssh: Option<&SshConfig>) -> Result<String, String> {
-    if let Some(out) = shell::try_shell("check_config", ssh, |cfg| shell::ha_cli(cfg, "core check"))? {
-        return Ok(out);
-    }
+pub fn check_config(base: &str) -> Result<String, String> {
     ha_post(base, "/api/config/core/check_config", Some("{}"))
 }
 
 pub fn get_error_log(
     base: &str,
     tail_lines: Option<u32>,
-    ssh: Option<&SshConfig>,
-    log_path: Option<&str>,
 ) -> Result<String, String> {
     if let Some(n) = tail_lines {
         if n == 0 {
             return Err("tail_lines must be >= 1".into());
         }
-    }
-    // Prefer shell-backed tail for efficiency and to bypass REST truncation.
-    if let Some(out) = shell::try_shell("get_error_log", ssh, |cfg| {
-        let path = log_path.unwrap_or(DEFAULT_HA_LOG_PATH);
-        let lines = tail_lines.unwrap_or(DEFAULT_SHELL_TAIL_LINES);
-        shell::tail_file(cfg, path, lines)
-    })? {
-        return Ok(out);
-    }
-    if log_path.is_some() {
-        host::log(
-            host::LogLevel::Warn,
-            "log_path ignored: REST API /api/error_log always returns the default log. \
-             Pass ssh to use a custom log_path via shell.",
-        );
     }
     let full = ha_get(base, "/api/error_log")?;
     if let Some(n) = tail_lines {
@@ -700,14 +677,7 @@ pub fn get_error_log(
     Ok(full)
 }
 
-pub fn restart_ha(base: &str, ssh: Option<&SshConfig>) -> Result<String, String> {
-    // Destructive action: use strict variant so shell-path errors propagate
-    // instead of silently falling back to a REST restart the user didn't ask for.
-    if let Some(out) = shell::try_shell_strict("restart_ha", ssh, |cfg| {
-        shell::ha_cli(cfg, "core restart")
-    })? {
-        return Ok(out);
-    }
+pub fn restart_ha(base: &str) -> Result<String, String> {
     call_service(base, "homeassistant", "restart", None)
 }
 
