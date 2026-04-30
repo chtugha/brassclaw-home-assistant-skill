@@ -36,3 +36,10 @@ Verified IronClaw upstream source (`staging` branch) for both host matching func
 - [x] Verified consistency with `validate_ha_url` which accepts exactly those two public domain families
 - [x] Version bump: 0.3.x → 0.4.0 across Cargo.toml, capabilities.json, SKILL.md
 - [x] All 41 tests pass
+
+### [x] Step: DuckDNS + Let's Encrypt automated setup
+
+- [x] Created `scripts/setup-duckdns.sh` — standalone helper that installs/configures the HA DuckDNS add-on via Supervisor API with Let's Encrypt enabled
+- [x] Integrated HTTPS setup recommendation into `install.sh` post-install output (shown when HA URL is local/HTTP)
+- Script flow: prompts for HA URL + token + DuckDNS subdomain + token → checks Supervisor availability → installs add-on → configures domain + Let's Encrypt → starts add-on → saves new HTTPS URL
+- Falls back to certbot instructions for non-HA-OS installs
