@@ -1,5 +1,5 @@
 {
-  "version": "0.3.1",
+  "version": "0.4.0",
   "wit_version": "0.3.0",
   "description": "Control Home Assistant: read/write entity states, call services, manage automations/scripts/scenes, publish MQTT, control Modbus, render templates, view history/logbook, config entries, and manage the HA system. REST actions require ha_url; shell-only actions require ssh.",
   "discovery_summary": {
@@ -50,7 +50,12 @@
     "http": {
       "allowlist": [
         {
-          "host": "*",
+          "host": "*.nabu.casa",
+          "path_prefix": "/api/",
+          "methods": ["GET", "POST", "PUT", "DELETE"]
+        },
+        {
+          "host": "*.duckdns.org",
           "path_prefix": "/api/",
           "methods": ["GET", "POST", "PUT", "DELETE"]
         }
@@ -59,7 +64,7 @@
         "ha_token": {
           "secret_name": "ha_token",
           "location": { "type": "bearer" },
-          "host_patterns": ["*"]
+          "host_patterns": ["*.nabu.casa", "*.duckdns.org"]
         }
       },
       "rate_limit": {
