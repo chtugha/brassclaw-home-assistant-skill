@@ -814,6 +814,7 @@ mod tests {
         assert!(validate_ha_url("http://localhost:8123").is_ok());
         assert!(validate_ha_url("http://127.0.0.1:8123").is_ok());
         assert!(validate_ha_url("https://my.nabu.casa").is_ok());
+        assert!(validate_ha_url("https://abc123def.ui.nabu.casa").is_ok());
         assert!(validate_ha_url("http://myha.internal:8123").is_ok());
         assert!(validate_ha_url("http://attacker.com").is_err());
         assert!(validate_ha_url("http://evil.example.org").is_err());

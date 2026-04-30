@@ -2,8 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-TOOL_SRC="$ROOT_DIR/tools-src/ha-tool"
+LOCAL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT_DIR="$(cd "$LOCAL_DIR/.." && pwd)"
 IRONCLAW_DIR="${HOME}/.ironclaw"
 HA_URL_FILE="$IRONCLAW_DIR/.ha_url"
 
@@ -18,7 +18,7 @@ warn()  { printf "${YELLOW}WARNING:${NC} %s\n" "$1"; }
 error() { printf "${RED}ERROR:${NC} %s\n" "$1" >&2; }
 step()  { printf "\n${BOLD}[%s/%s]${NC} %s\n" "$1" "$TOTAL_STEPS" "$2"; }
 
-TOTAL_STEPS=5
+TOTAL_STEPS=3
 
 validate_ha_url() {
     local url="$1"
@@ -45,9 +45,7 @@ validate_ha_url() {
        [[ "$host_part" == *.local ]] ||
        [[ "$host_part" == *.internal ]] ||
        [[ "$host_part" == *.lan ]] ||
-       [[ "$host_part" == *.home ]] ||
-       [[ "$host_part" == *.duckdns.org ]] ||
-       [[ "$host_part" == *.nabu.casa ]]; then
+       [[ "$host_part" == *.home ]]; then
         return 0
     fi
 
@@ -62,12 +60,12 @@ prompt_ha_url() {
 
     echo ""
     echo "  Your Home Assistant base URL is needed for heartbeat monitoring"
-    echo "  and cron routines. It will be saved for future updates."
+    echo "  and cron routines."
     echo ""
     echo "  Examples:"
     echo "    http://homeassistant.local:8123"
     echo "    http://192.168.1.100:8123"
-    echo "    https://myha.duckdns.org"
+    echo "    http://localhost:8123"
     echo ""
 
     local url=""
@@ -89,11 +87,12 @@ prompt_ha_url() {
         if validate_ha_url "$url"; then
             break
         else
-            warn "URL does not match a recognized private/local address pattern."
-            echo "  Recognized: localhost, 127.0.0.1, 192.168.*, 10.*, 172.16-31.*,"
-            echo "              *.local, *.internal, *.lan, *.home, *.duckdns.org, *.nabu.casa"
+            warn "URL does not look like a local HA address."
+            echo "  This installer is for local HA instances (http://, private IPs, *.local)."
+            echo "  For public HTTPS HA (Nabu Casa, DuckDNS), use the remote installer instead:"
+            echo "    ${BOLD}./scripts/install.sh${NC}"
             echo ""
-            printf "  Use this URL anyway (e.g. reverse proxy)? [y/N]: "
+            printf "  Use this URL anyway? [y/N]: "
             read -r override
             if [[ "$override" =~ ^[Yy]$ ]]; then
                 break
@@ -129,21 +128,6 @@ replace_ha_url_placeholder() {
     fi
 }
 
-HEARTBEAT_STATUS="not_found"
-ROUTINES_STATUS="not_found"
-
-# --- Pre-flight checks ---
-
-if ! command -v cargo &>/dev/null; then
-    error "Rust toolchain not found."
-    echo ""
-    echo "  Install Rust first:"
-    echo "    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-    echo "    source \"\$HOME/.cargo/env\""
-    echo ""
-    exit 1
-fi
-
 if ! command -v ironclaw &>/dev/null; then
     error "ironclaw CLI not found."
     echo ""
@@ -153,59 +137,35 @@ if ! command -v ironclaw &>/dev/null; then
 fi
 
 echo ""
-echo "  ${BOLD}IronClaw Home Assistant Extension — Installer${NC}"
-echo "  ─────────────────────────────────────────────"
+echo "  ${BOLD}IronClaw Home Assistant Extension — Local Installer${NC}"
+echo "  ────────────────────────────────────────────────────"
+echo ""
+echo "  This installer sets up the local HA extension (shell+curl)."
+echo "  No WASM tool or build step required."
 
-# --- Step 1: Ensure build dependencies ---
+# --- Step 1: Prompt for Home Assistant URL ---
 
-step 1 "Checking build dependencies..."
-
-if ! cargo component --version &>/dev/null 2>&1; then
-    info "Installing cargo-component (required for WASM builds)..."
-    cargo install cargo-component
-else
-    info "cargo-component already installed."
-fi
-
-if ! rustup target list --installed 2>/dev/null | grep -q wasm32-wasip2; then
-    info "Adding wasm32-wasip2 target..."
-    rustup target add wasm32-wasip2
-else
-    info "wasm32-wasip2 target already present."
-fi
-
-# --- Step 2: Prompt for Home Assistant URL ---
-
-step 2 "Configuring Home Assistant URL..."
+step 1 "Configuring Home Assistant URL..."
 prompt_ha_url
 info "URL saved: $HA_URL"
 
-# --- Step 3: Install ha-tool ---
+# --- Step 2: Install skill, heartbeat, and routines ---
 
-step 3 "Installing ha-tool from source..."
-ironclaw tool install "$TOOL_SRC"
+step 2 "Installing skill and heartbeat files..."
 
-# --- Step 4: Install optional files ---
+REMOTE_SKILL_DIR="$IRONCLAW_DIR/skills/home-assistant"
+if [[ -d "$REMOTE_SKILL_DIR" ]]; then
+    warn "Remote extension skill found at $REMOTE_SKILL_DIR"
+    echo "  The local and remote extensions have overlapping keywords."
+    echo "  Running both wastes token budget. Removing remote skill..."
+    rm -rf "$REMOTE_SKILL_DIR"
+    info "Removed remote skill: $REMOTE_SKILL_DIR"
+fi
 
-step 4 "Installing skill and heartbeat files..."
-
-SKILL_SRC="$ROOT_DIR/skills/SKILL.md"
-SKILL_DEST_DIR="$IRONCLAW_DIR/skills/home-assistant"
+SKILL_SRC="$LOCAL_DIR/skills/SKILL.md"
+SKILL_DEST_DIR="$IRONCLAW_DIR/skills/home-assistant-local"
 SKILL_DEST="$SKILL_DEST_DIR/SKILL.md"
 SKILL_STATUS="not_found"
-OLD_SKILL_PATH="$IRONCLAW_DIR/skills/home-assistant.SKILL.md"
-if [[ -f "$OLD_SKILL_PATH" ]]; then
-    rm -f "$OLD_SKILL_PATH"
-    info "Removed old skill file at wrong path: $OLD_SKILL_PATH"
-fi
-LOCAL_SKILL_DIR="$IRONCLAW_DIR/skills/home-assistant-local"
-if [[ -d "$LOCAL_SKILL_DIR" ]]; then
-    warn "Local extension skill found at $LOCAL_SKILL_DIR"
-    echo "  The local and remote extensions have overlapping keywords."
-    echo "  Running both wastes token budget. Removing local skill..."
-    rm -rf "$LOCAL_SKILL_DIR"
-    info "Removed local skill: $LOCAL_SKILL_DIR"
-fi
 if [[ -f "$SKILL_SRC" ]]; then
     if [[ -f "$SKILL_DEST" ]]; then
         src_ver="$(extract_skill_version "$SKILL_SRC")"
@@ -217,7 +177,7 @@ if [[ -f "$SKILL_SRC" ]]; then
             mkdir -p "$SKILL_DEST_DIR"
             cp "$SKILL_SRC" "$SKILL_DEST"
             SKILL_STATUS="configured"
-            info "Upgraded skill: $dest_ver → $src_ver"
+            info "Upgraded skill: $dest_ver -> $src_ver"
         else
             SKILL_STATUS="skipped"
             info "SKILL.md already at version $dest_ver — no update needed."
@@ -229,11 +189,12 @@ if [[ -f "$SKILL_SRC" ]]; then
         info "Installed skill: $SKILL_DEST"
     fi
 else
-    warn "No SKILL.md found — skipping (tool still works via auto-discovery)."
+    warn "No SKILL.md found in local/skills/ — skipping."
 fi
 
-HEARTBEAT_SRC="$ROOT_DIR/heartbeat/HEARTBEAT.md"
+HEARTBEAT_SRC="$LOCAL_DIR/heartbeat/HEARTBEAT.md"
 HEARTBEAT_DEST="$IRONCLAW_DIR/HEARTBEAT.md"
+HEARTBEAT_STATUS="not_found"
 if [[ -f "$HEARTBEAT_SRC" ]]; then
     if [[ -f "$HEARTBEAT_DEST" ]]; then
         HEARTBEAT_STATUS="skipped"
@@ -249,8 +210,9 @@ else
     warn "No HEARTBEAT.md found — skipping."
 fi
 
-ROUTINES_SRC="$ROOT_DIR/heartbeat/routines.md"
+ROUTINES_SRC="$LOCAL_DIR/heartbeat/routines.md"
 ROUTINES_DEST="$IRONCLAW_DIR/routines.md"
+ROUTINES_STATUS="not_found"
 if [[ -f "$ROUTINES_SRC" ]]; then
     if [[ -f "$ROUTINES_DEST" ]]; then
         ROUTINES_STATUS="skipped"
@@ -264,62 +226,78 @@ if [[ -f "$ROUTINES_SRC" ]]; then
     fi
 fi
 
-# --- Step 5: Configure HA token ---
+# --- Step 3: Store HA token ---
 
-step 5 "Configuring Home Assistant access token..."
+step 3 "Configuring Home Assistant access token..."
 echo ""
-echo "  Create a long-lived access token in Home Assistant:"
+echo "  The agent needs a long-lived access token to call the HA REST API."
+echo "  Create one in Home Assistant:"
 echo "    1. Open ${BOLD}${HA_URL}/profile${NC} in your browser"
 echo "    2. Scroll to ${BOLD}Long-Lived Access Tokens${NC}"
 echo "    3. Click ${BOLD}Create Token${NC}, name it (e.g. 'ironclaw'), copy the token"
 echo ""
-ironclaw tool auth ha-tool
+echo "  The token will be stored in IronClaw's encrypted secret store."
+echo ""
+
+TOKEN_FILE="$IRONCLAW_DIR/.ha_token"
+saved_token=""
+if [[ -f "$TOKEN_FILE" ]]; then
+    saved_token="$(cat "$TOKEN_FILE" 2>/dev/null || true)"
+fi
+
+while true; do
+    if [[ -n "$saved_token" ]]; then
+        printf "  HA Token [${BOLD}*****${NC} — press Enter to keep]: "
+    else
+        printf "  HA Token: "
+    fi
+    read -r -s token
+    echo ""
+    if [[ -z "$token" && -n "$saved_token" ]]; then
+        token="$saved_token"
+    fi
+    if [[ -z "$token" ]]; then
+        warn "Token cannot be empty."
+        continue
+    fi
+    break
+done
+
+mkdir -p "$IRONCLAW_DIR"
+echo "$token" > "$TOKEN_FILE"
+chmod 600 "$TOKEN_FILE"
+info "Token saved: $TOKEN_FILE"
 
 # --- Done ---
 
 echo ""
 echo "  ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo "  ${GREEN}  ✓ ha-tool installed successfully!${NC}"
+echo "  ${GREEN}  ✓ Local HA extension installed!${NC}"
 echo "  ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-echo "  ${BOLD}Verify:${NC}"
-echo "    ironclaw tool list"
-echo "    ironclaw tool info ha-tool"
 echo ""
 echo "  ${BOLD}Quick test:${NC}"
 echo "    ironclaw chat"
 echo "    > Is my Home Assistant at ${HA_URL} online?"
 echo ""
-if [[ "$HA_URL" =~ ^http:// ]] || [[ "$HA_URL" =~ \.(local|lan|home|internal)(:|/|$) ]] || [[ "$HA_URL" =~ ^https?://(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.) ]]; then
-    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo "  ${YELLOW}  Local HA detected — wrong installer${NC}"
-    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo "  Your URL (${HA_URL}) is a local address. This installer"
-    echo "  sets up ha-tool, which requires HTTPS + public hostname."
-    echo ""
-    echo "  For local HA, use the local installer instead:"
-    echo "    ${BOLD}./local/scripts/install.sh${NC}"
-    echo ""
-    echo "  Or set up DuckDNS + Let's Encrypt to get a public HTTPS URL:"
-    echo "    ${BOLD}bash scripts/setup-duckdns.sh${NC}"
-    echo ""
-fi
+echo "  The agent will use shell+curl to call your HA REST API directly."
+echo "  No WASM sandbox restrictions — works with any local HA instance."
+echo ""
 echo "  ${BOLD}Configuration saved:${NC}"
 echo "    HA URL:     $HA_URL_FILE"
+echo "    HA Token:   $TOKEN_FILE"
 case "$SKILL_STATUS" in
     configured) echo "    Skill:      $SKILL_DEST" ;;
-    skipped)    echo "    Skill:      $SKILL_DEST (skipped — already exists)" ;;
-    *)          echo "    Skill:      not installed (source template not found)" ;;
+    skipped)    echo "    Skill:      $SKILL_DEST (skipped — already up to date)" ;;
+    *)          echo "    Skill:      not installed (source not found)" ;;
 esac
 case "$HEARTBEAT_STATUS" in
     configured) echo "    Heartbeat:  $HEARTBEAT_DEST" ;;
     skipped)    echo "    Heartbeat:  $HEARTBEAT_DEST (skipped — already exists)" ;;
-    *)          echo "    Heartbeat:  not installed (source template not found)" ;;
+    *)          echo "    Heartbeat:  not installed (source not found)" ;;
 esac
 case "$ROUTINES_STATUS" in
     configured) echo "    Routines:   $ROUTINES_DEST" ;;
     skipped)    echo "    Routines:   $ROUTINES_DEST (skipped — already exists)" ;;
-    *)          echo "    Routines:   not installed (source template not found)" ;;
+    *)          echo "    Routines:   not installed (source not found)" ;;
 esac
 echo ""

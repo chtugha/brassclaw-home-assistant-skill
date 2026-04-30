@@ -9,19 +9,6 @@ IronClaw reads this file on every heartbeat tick (default: every 30 minutes).
 It runs read-only health checks, detects problems, and proposes fixes.
 No changes are made without your explicit confirmation.
 
-## Connection Method (detect once per session)
-
-`{{HA_URL}}` determines how to call the HA API:
-
-- **Public HTTPS** (`https://*.nabu.casa`, `https://*.duckdns.org`): use `ha-tool` actions directly — the sandbox allows these.
-- **Local/HTTP** (`http://`, `192.168.*`, `*.local`, `*.lan`): **do not use ha-tool** — the sandbox blocks it. Use the native `shell` tool with `curl`:
-  ```
-  curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/<endpoint>
-  ```
-  Ask the user for their HA long-lived access token once, then reuse it for all calls in the session.
-
-Detect the URL scheme on the first tick, then use the same method for all checks. The check names and logic below are identical — only the call mechanism differs. For local HA, map each `ha-tool` action to its equivalent `curl` call (see SKILL.md "Local HA via shell+curl").
-
 ## Confirmation Rules (MANDATORY)
 
 - **NEVER** call `restart_ha`, `call_service`, `set_state`, `fire_event`,

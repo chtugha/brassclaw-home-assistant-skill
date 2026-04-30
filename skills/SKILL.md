@@ -42,14 +42,12 @@ activation:
     - home-automation
     - iot
     - smarthome
-  max_context_tokens: 2500
+  max_context_tokens: 2000
 ---
 
 # Home Assistant via ha-tool
 
-Every call requires `ha_url` — ask once, reuse. The sandbox enforces **HTTPS and public hostnames**: use `https://<id>.ui.nabu.casa` (Home Assistant Cloud) or a public DuckDNS/custom domain with TLS.
-
-**Local HTTP instances** (`192.168.*`, `*.local`, `http://`): ha-tool **cannot reach these** — the sandbox blocks HTTP and private IPs. Use the native `shell` tool with `curl` instead (see **Local HA via shell+curl** below).
+Every call requires `ha_url` — ask once, reuse. `ha_url` must be HTTPS with a public hostname: `https://<id>.ui.nabu.casa` (Home Assistant Cloud) or a public DuckDNS/custom domain with TLS.
 
 ## Actions
 
@@ -82,33 +80,11 @@ Every call requires `ha_url` — ask once, reuse. The sandbox enforces **HTTPS a
 3. **History**: always pass `start_time`/`end_time` or `hours_back` to avoid pulling full history.
 4. **Templates**: use `render_template` for complex server-side conditions.
 
-## Local HA via shell+curl (when ha-tool cannot reach HA)
-
-When HA is on a local/private network (`http://`, `192.168.*`, `*.local`), **do not use ha-tool**. Instead, call the HA REST API directly via the native `shell` tool:
-
-```
-shell: curl -s -H "Authorization: Bearer <TOKEN>" http://<HA_IP>:8123/api/<endpoint>
-```
-
-**Common patterns:**
-- **Get states**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/states`
-- **Get single entity**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/states/sensor.temperature`
-- **Call service**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{"entity_id":"light.living_room"}' http://HA:8123/api/services/light/turn_on`
-- **Check config**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{}' http://HA:8123/api/config/core/check_config`
-- **Error log**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/error_log`
-- **Restart**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{}' http://HA:8123/api/services/homeassistant/restart`
-- **Config entries**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/config/config_entries/entry`
-- **MQTT publish**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{"topic":"home/test","payload":"1"}' http://HA:8123/api/services/mqtt/publish`
-- **Read file via SSH**: `shell: ssh user@HA_IP cat /config/configuration.yaml`
-- **Write file via SSH**: pipe content through `ssh user@HA_IP tee /config/file.yaml`
-
-Ask the user for `HA_IP`, `PORT`, and `TOKEN` once, then reuse across all calls.
-
 ## Modbus Workflows
 
 ### 1. Scan a Modbus device for registers
 
-Use the native `shell` tool via SSH to probe registers. Prefer `modpoll` (install: `pip install modpoll`). Fall back to Python `pymodbus` one-liners.
+Use SSH to probe registers on the HA host. Prefer `modpoll` (install: `pip install modpoll`). Fall back to Python `pymodbus` one-liners.
 
 **Holding registers** (function code 3 — the most common):
 ```
@@ -176,7 +152,7 @@ modbus:
 1. `get_error_log tail_lines=100` — look for `Modbus` / `pymodbus` errors
 2. `get_config_entries domain=modbus` — get the hub's `entry_id`
 3. Common fixes:
-   - **Timeout / connection refused**: check host:port reachability via `shell` (`ssh user@HA nc -z <host> <port>`)
+   - **Timeout / connection refused**: check host:port reachability via SSH (`ssh user@HA nc -z <host> <port>`)
    - **Illegal data address**: register doesn't exist on device — remove from config or fix address
    - **Slave failure**: device overloaded — increase `scan_interval` or reduce register count
    - **CRC error** (RTU): wiring/baud rate issue — check serial config

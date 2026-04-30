@@ -4,23 +4,46 @@ Give your [IronClaw](https://github.com/nearai/ironclaw) AI agent full control o
 
 ---
 
-## What You Need
+## Choose Your Installer
 
-Before you start, make sure you have these three things:
+This extension comes in two variants. **Install one, not both** — the installers handle mutual exclusion automatically.
 
-| # | Requirement | How to check | How to install |
-|---|---|---|---|
-| 1 | **Rust** | Run `cargo --version` | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh -s -- -y` then **open a new terminal** |
-| 2 | **IronClaw** | Run `ironclaw --version` | See [IronClaw installation](https://github.com/nearai/ironclaw) |
-| 3 | **Home Assistant** | Open `http://<your-ha-ip>:8123` in a browser | [home-assistant.io/installation](https://www.home-assistant.io/installation/) |
+| | Local | Remote |
+|---|---|---|
+| **For** | HA on your LAN (`http://`, `192.168.*`, `*.local`) | HA via public HTTPS (Nabu Casa, DuckDNS) |
+| **How it works** | Agent uses native `shell` + `curl` | Agent uses `ha-tool` WASM component |
+| **Install command** | `./local/scripts/install.sh` | `./scripts/install.sh` |
+| **Requires Rust** | No | Yes |
+| **Install time** | < 1 second | 1–2 minutes (WASM compile) |
+| **Extras** | — | Structured responses, input validation, compact mode |
 
-> **Tip:** If `cargo` is not found after installing Rust, run `source "$HOME/.cargo/env"` or open a new terminal window.
+> **Most users should install Local.** It works with any HA instance, requires no build tools, and has no sandbox restrictions.
 
 ---
 
-## Installation
+## What You Need
 
-Three commands. The install script handles everything else.
+| # | Requirement | How to check | How to install |
+|---|---|---|---|
+| 1 | **IronClaw** | Run `ironclaw --version` | See [IronClaw installation](https://github.com/nearai/ironclaw) |
+| 2 | **Home Assistant** | Open `http://<your-ha-ip>:8123` in a browser | [home-assistant.io/installation](https://www.home-assistant.io/installation/) |
+| 3 | **Rust** (remote only) | Run `cargo --version` | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh -s -- -y` then **open a new terminal** |
+
+---
+
+## Installation — Local (recommended)
+
+Two commands. No build step.
+
+```bash
+git clone https://github.com/chtugha/ironclaw-home-assistant-skill
+cd ironclaw-home-assistant-skill
+./local/scripts/install.sh
+```
+
+The installer asks for your HA URL and access token, then copies the skill, heartbeat, and routine files to `~/.ironclaw/`.
+
+## Installation — Remote (public HTTPS only)
 
 ```bash
 git clone https://github.com/chtugha/ironclaw-home-assistant-skill
@@ -33,7 +56,7 @@ The installer will walk you through 5 steps:
 | Step | What happens | What you do |
 |---|---|---|
 | 1 | Installs build tools (`cargo-component`, WASM target) | Nothing — automatic |
-| 2 | Asks for your Home Assistant URL | Type your URL (e.g. `http://192.168.1.100:8123`) |
+| 2 | Asks for your Home Assistant URL | Type your HTTPS URL (e.g. `https://myha.duckdns.org`) |
 | 3 | Compiles and installs the `ha-tool` WASM extension from source | Nothing — automatic (takes 1–2 min on first run) |
 | 4 | Installs skill file, heartbeat, and routine templates | Nothing — automatic |
 | 5 | Asks for your Home Assistant access token | Paste your token (see below) |
@@ -56,13 +79,7 @@ The installer will pause at Step 5 and ask you to paste a token. **Create this b
 
 ## Verify It Works
 
-After installation completes, run:
-
-```bash
-ironclaw tool list
-```
-
-You should see `ha-tool` in the output. Then start a chat:
+After installation completes, start a chat:
 
 ```bash
 ironclaw chat
@@ -98,7 +115,7 @@ Once installed, just talk to the agent naturally. Here are some examples:
 | `Send a notification to my phone: "Garage is open".` | Pushes via notify service |
 | `Reload automations.` | Reloads YAML automations without restart |
 
-The agent figures out which `ha-tool` action to call based on what you say. You don't need to know the API — just describe what you want.
+The agent figures out which API calls to make based on what you say. You don't need to know the API — just describe what you want.
 
 ---
 
@@ -107,16 +124,16 @@ The agent figures out which `ha-tool` action to call based on what you say. You 
 ```bash
 cd ironclaw-home-assistant-skill
 git pull
-./scripts/install.sh
+./local/scripts/install.sh    # or ./scripts/install.sh for remote
 ```
 
 What happens on re-install:
 
 - **HA URL** — remembered from last time. Press Enter to keep it, or type a new one.
-- **ha-tool** — rebuilt and reinstalled from the latest source.
 - **SKILL.md** — automatically upgraded if a newer version is available. Skipped if already up to date.
-- **HEARTBEAT.md & routines.md** — **not overwritten** if they already exist (to preserve your edits). If the new version has changes, merge them manually from `heartbeat/HEARTBEAT.md` and `heartbeat/routines.md` in the repo.
-- **HA token** — you will be prompted again. If your existing token still works, just paste the same one. To update it later without re-running the full installer, run `ironclaw tool auth ha-tool` directly.
+- **HEARTBEAT.md & routines.md** — **not overwritten** if they already exist (to preserve your edits). If the new version has changes, merge them manually.
+- **ha-tool** (remote only) — rebuilt and reinstalled from the latest source.
+- **HA token** — re-prompted. Paste the same token, or create a new one.
 
 ---
 
@@ -170,11 +187,11 @@ Open `~/.ironclaw/routines.md`, copy any routine prompt, paste it into a chat se
 
 ---
 
-## Local HA Instances
+## Local vs Remote — When to Use Which
 
-The IronClaw sandbox enforces HTTPS + public hostnames for WASM tool HTTP requests. For local HA instances (`http://`, `192.168.*`, `*.local`), ha-tool cannot reach the HA API. Instead, the agent uses the native `shell` tool with `curl` to call the HA REST API directly — no sandbox restrictions apply to native tools.
+**Local** (recommended): Use `./local/scripts/install.sh` for any HA on your LAN. The agent calls the HA REST API directly via `shell` + `curl`. No build tools, no sandbox restrictions, works with `http://`.
 
-For public HTTPS access, run `bash scripts/setup-duckdns.sh` to configure DuckDNS + Let's Encrypt on your HA instance.
+**Remote**: Use `./scripts/install.sh` only when your HA is accessible via public HTTPS (Nabu Casa Cloud or DuckDNS + Let's Encrypt). Provides structured JSON responses, input validation, and compact entity output via the `ha-tool` WASM component. To set up DuckDNS, run `bash scripts/setup-duckdns.sh`.
 
 ---
 
@@ -182,13 +199,13 @@ For public HTTPS access, run `bash scripts/setup-duckdns.sh` to configure DuckDN
 
 | Problem | Solution |
 |---|---|
-| `cargo: command not found` | Run `source "$HOME/.cargo/env"` or open a new terminal |
 | `ironclaw: command not found` | Make sure IronClaw is installed and in your `$PATH` |
-| Build fails with "can't find crate `std`" | Run `rustup target add wasm32-wasip2` |
-| HA API returns **401 Unauthorized** | Your token is expired or revoked — create a new one in HA, then run `ironclaw tool auth ha-tool` |
-| HA API returns **400** or **404** | Wrong entity ID or service name — ask the agent to `show all lights` (or sensors, etc.) first |
-| URL rejected by the tool | Must be a private/local address — see [Accepted URL Formats](#accepted-url-formats) |
-| Agent doesn't use `ha-tool` | Make sure `ironclaw tool list` shows `ha-tool` — re-run `./scripts/install.sh` if needed |
+| `cargo: command not found` (remote only) | Run `source "$HOME/.cargo/env"` or open a new terminal |
+| Build fails with "can't find crate `std`" (remote only) | Run `rustup target add wasm32-wasip2` |
+| HA API returns **401 Unauthorized** | Your token is expired or revoked — create a new one in HA |
+| HA API returns **400** or **404** | Wrong entity ID or service name — ask the agent to `show all lights` first |
+| Agent doesn't use HA skill | Run `ironclaw skills list` and check for `home-assistant-local` or `home-assistant` |
+| Both skills showing up | Re-run the installer for the one you want — it removes the other automatically |
 
 ---
 
@@ -204,22 +221,28 @@ For public HTTPS access, run `bash scripts/setup-duckdns.sh` to configure DuckDN
 
 ```
 ironclaw-home-assistant-skill/
+├── local/                     # Local extension (shell+curl, no WASM)
+│   ├── scripts/install.sh     #   Local installer (run this for local HA)
+│   ├── skills/SKILL.md        #   Skill file (curl-only)
+│   └── heartbeat/
+│       ├── HEARTBEAT.md       #   Heartbeat template (curl-only)
+│       └── routines.md        #   Cron routine prompts (curl-only)
 ├── scripts/
-│   ├── install.sh          # Interactive installer (run this)
-│   ├── setup-duckdns.sh    # DuckDNS + Let's Encrypt HTTPS setup
-│   └── build.sh            # Standalone build script (for development)
-├── tools-src/ha-tool/      # Rust WASM source code
+│   ├── install.sh             # Remote installer (run this for public HTTPS HA)
+│   ├── setup-duckdns.sh       # DuckDNS + Let's Encrypt HTTPS setup
+│   └── build.sh               # Standalone build script (for development)
+├── tools-src/ha-tool/         # Rust WASM source code (remote only)
 │   ├── src/
-│   │   ├── lib.rs          # Entry point, action dispatcher
-│   │   ├── api.rs          # HA REST API calls
-│   │   └── types.rs        # Data types and JSON schema
+│   │   ├── lib.rs             #   Entry point, action dispatcher
+│   │   ├── api.rs             #   HA REST API calls
+│   │   └── types.rs           #   Data types and JSON schema
 │   └── Cargo.toml
-├── skills/SKILL.md          # AI skill hint (installed to ~/.ironclaw/skills/home-assistant/SKILL.md)
+├── skills/SKILL.md            # Remote skill file (ha-tool actions)
 ├── heartbeat/
-│   ├── HEARTBEAT.md         # Background monitoring template
-│   └── routines.md          # Cron routine prompts
-├── dist/                    # Build output (generated by build.sh)
-└── wit/tool.wit             # WASM interface definition
+│   ├── HEARTBEAT.md           # Remote heartbeat template (ha-tool)
+│   └── routines.md            # Remote cron routine prompts (ha-tool)
+├── dist/                      # Build output (generated by build.sh)
+└── wit/tool.wit               # WASM interface definition
 ```
 
 ---

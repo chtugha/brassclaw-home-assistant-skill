@@ -66,3 +66,33 @@ Assessed every component for necessity given the sandbox architecture: WASM tool
 - [x] README.md: replaced SSH Shell Access section with Local HA Instances section, updated project structure (removed shell.rs, added setup-duckdns.sh)
 - [x] Version bump: 0.4.1 → 0.5.0 across Cargo.toml, capabilities.json, SKILL.md
 - [x] All 23 tests pass, WASM build succeeds (471.8 KiB)
+
+### [x] Step: Install script modernization — shell+curl as default
+
+Updated install.sh and README.md to present shell+curl as the fully working default for local HA instances, with DuckDNS HTTPS setup as optional enhancement:
+- [x] install.sh: changed local-HA post-install banner from yellow "HTTPS setup recommended" warning to green "Local HA detected — shell+curl mode" confirmation, with DuckDNS as dimmed optional note
+- [x] README.md: reworded "Local HA Instances" section — "works out of the box" instead of emphasizing sandbox restrictions
+- [x] All 23 tests pass
+
+### [x] Step: Split into local + remote extensions
+
+Split the single extension into two independent variants to reduce token cost and eliminate dual-mode complexity:
+
+**Local extension (`local/`)** — no WASM, no build step:
+- [x] Created `local/skills/SKILL.md` — curl-only (188 lines), no ha-tool references, full Modbus workflows, max_context_tokens: 2000
+- [x] Created `local/heartbeat/HEARTBEAT.md` — curl-only (146 lines), no dual-mode detection, uses `jq` for domain filtering
+- [x] Created `local/heartbeat/routines.md` — curl-based routines (73 lines), uses `jq` for state filtering
+- [x] Created `local/scripts/install.sh` — 3-step installer (URL, files, token), no Rust/WASM build, handles mutual exclusion with remote skill
+- [x] Token savings: ~2100 tokens/tick for local users (no ha-tool schema, no sandbox docs, no dual-mode logic)
+
+**Remote extension cleanup:**
+- [x] Removed "Local HA via shell+curl" section from `skills/SKILL.md` (~22 lines saved)
+- [x] Removed "Connection Method" dual-mode detection from `heartbeat/HEARTBEAT.md` (~12 lines saved)
+- [x] Removed dual-mode note from `heartbeat/routines.md`
+- [x] Reduced `max_context_tokens` from 2500 to 2000 (shell+curl docs removed)
+- [x] Updated `scripts/install.sh`: mutual exclusion (removes local skill if present), warns when local URL detected and points to local installer
+- [x] Updated `README.md`: "Choose Your Installer" comparison table, separate install sections, updated project structure, updated troubleshooting
+
+**Mutual exclusion**: Both installers automatically remove the other variant's skill to prevent double activation and wasted token budget.
+
+- [x] All 23 tests pass, both install scripts pass `bash -n` syntax check
