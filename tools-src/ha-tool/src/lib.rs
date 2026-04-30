@@ -16,9 +16,11 @@ const TOOL_DESCRIPTION: &str = "Control Home Assistant via REST API. \
 The `action` field selects the operation — use logical names like `get_state`, `call_service`, \
 `mqtt_publish` (NOT HTTP method names like GET/POST). `ha_url` must be HTTPS with a publicly \
 reachable hostname (e.g. https://<id>.ui.nabu.casa or a public DuckDNS domain) — the sandbox \
-enforces HTTPS and blocks private/local IPs; for local http:// instances use the SSH shell path. \
-Optional `ssh` on `check_config`, `get_error_log`, and `restart_ha` enables shell-backed mode \
-via the remote-shell extension. \
+enforces HTTPS and blocks private/local IPs. IMPORTANT: for local http:// HA instances, \
+do NOT use this tool at all — use the native `shell` tool with `curl` to call the HA REST API \
+directly (e.g. shell: curl -s -H 'Authorization: Bearer TOKEN' http://192.168.1.100:8123/api/states). \
+ha-tool's shell actions (shell_exec, ha_cli, etc.) also fail for local instances because they use \
+WASM-to-WASM tool_invoke which is equally sandbox-restricted. \
 Supports: states, services, events, automations, scripts, scenes, MQTT, Modbus, templates, \
 history, logs, calendars, notifications, config entries, and reloads. \
 Use `get_states` with `compact: true` for cheap discovery, `get_config_entries` to find \

@@ -58,6 +58,19 @@ pub fn is_shell_available(gateway_port: Option<u16>) -> bool {
     host::tool_invoke(REMOTE_SHELL_ALIAS, &p).is_ok()
 }
 
+const SANDBOX_HINT: &str = "The sandbox blocks WASM-to-WASM HTTP calls to local/private \
+addresses. For local HA instances, use the native `shell` tool with `curl` instead of ha-tool \
+(e.g. shell: curl -s -H 'Authorization: Bearer TOKEN' http://HA:8123/api/states).";
+
+fn is_sandbox_error(err: &str) -> bool {
+    let lower = err.to_lowercase();
+    lower.contains("http not allowed")
+        || lower.contains("insecurescheme")
+        || lower.contains("hostnotallowed")
+        || lower.contains("private ip")
+        || lower.contains("dns rebinding")
+}
+
 fn log_shell_fallback(action: &str, reason: &str) {
     host::log(
         host::LogLevel::Warn,
@@ -83,6 +96,12 @@ where
     match f(cfg) {
         Ok(s) => Ok(Some(s)),
         Err(e) => {
+            if is_sandbox_error(&e) {
+                return Err(format!(
+                    "Shell action '{}' blocked by sandbox: {}. {}",
+                    action, e, SANDBOX_HINT
+                ));
+            }
             log_shell_fallback(action, &e);
             Ok(None)
         }
@@ -106,7 +125,16 @@ where
         log_shell_fallback(action, "remote-shell extension not installed");
         return Ok(None);
     }
-    f(cfg).map(Some)
+    f(cfg).map(Some).map_err(|e| {
+        if is_sandbox_error(&e) {
+            format!(
+                "Shell action '{}' blocked by sandbox: {}. {}",
+                action, e, SANDBOX_HINT
+            )
+        } else {
+            e
+        }
+    })
 }
 
 fn ensure_session(ssh: &SshConfig) -> Result<String, String> {
@@ -155,7 +183,13 @@ fn ensure_session(ssh: &SshConfig) -> Result<String, String> {
         body["gateway_port"] = serde_json::json!(p);
     }
     let params = serde_json::to_string(&body).map_err(|e| e.to_string())?;
-    let resp = host::tool_invoke(REMOTE_SHELL_ALIAS, &params)?;
+    let resp = host::tool_invoke(REMOTE_SHELL_ALIAS, &params).map_err(|e| {
+        if is_sandbox_error(&e) {
+            format!("SSH session blocked by sandbox: {}. {}", e, SANDBOX_HINT)
+        } else {
+            e
+        }
+    })?;
     parse_connect_response(&resp)
 }
 
@@ -204,7 +238,13 @@ pub fn shell_exec(ssh: &SshConfig, command: &str, timeout_secs: Option<u32>) -> 
         body["gateway_port"] = serde_json::json!(p);
     }
     let params = serde_json::to_string(&body).map_err(|e| e.to_string())?;
-    host::tool_invoke(REMOTE_SHELL_ALIAS, &params)
+    host::tool_invoke(REMOTE_SHELL_ALIAS, &params).map_err(|e| {
+        if is_sandbox_error(&e) {
+            format!("Shell command blocked by sandbox: {}. {}", e, SANDBOX_HINT)
+        } else {
+            e
+        }
+    })
 }
 
 /// Parse the human-formatted `execute` response produced by the
@@ -635,6 +675,17 @@ mod tests {
             worst_case,
             MAX_COMMAND_LEN
         );
+    }
+
+    #[test]
+    fn test_is_sandbox_error_detection() {
+        assert!(is_sandbox_error("HTTP not allowed: HTTP request not allowed: Denied(InsecureScheme(\"http\"))"));
+        assert!(is_sandbox_error("Tool error: HostNotAllowed: host 192.168.1.100 not in allowlist"));
+        assert!(is_sandbox_error("DNS rebinding detected: homeassistant.local resolved to private IP 192.168.1.100"));
+        assert!(is_sandbox_error("Blocked: private IP 10.0.0.1 not allowed"));
+        assert!(!is_sandbox_error("Connection refused"));
+        assert!(!is_sandbox_error("Timeout after 30s"));
+        assert!(!is_sandbox_error("remote-shell extension not installed"));
     }
 
     #[test]

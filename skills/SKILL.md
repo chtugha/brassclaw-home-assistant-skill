@@ -1,6 +1,6 @@
 ---
 name: home-assistant
-version: 0.4.0
+version: 0.4.1
 description: Control Home Assistant — lights, climate, switches, automations, scripts, scenes, MQTT, Modbus, and system management via ha-tool
 activation:
   keywords:
@@ -47,7 +47,13 @@ activation:
 
 # Home Assistant via ha-tool
 
-Every call requires `ha_url` — ask once, reuse. The sandbox enforces **HTTPS and public hostnames**: use `https://<id>.ui.nabu.casa` (Home Assistant Cloud) or a public DuckDNS/custom domain with TLS. Local HTTP instances (`192.168.*`, `*.local`, `http://`) cannot be reached via REST — use the SSH shell path instead.
+Every call requires `ha_url` — ask once, reuse. The sandbox enforces **HTTPS and public hostnames**: use `https://<id>.ui.nabu.casa` (Home Assistant Cloud) or a public DuckDNS/custom domain with TLS.
+
+**IMPORTANT — Local HTTP instances** (`192.168.*`, `*.local`, `http://`): ha-tool **cannot reach these at all** — neither REST nor shell actions work because the sandbox blocks both the HTTP request and the WASM-to-WASM `tool_invoke` to remote-shell. Instead, use the native `shell` tool directly with `curl`:
+```
+shell: curl -s -H "Authorization: Bearer $HA_TOKEN" http://192.168.1.100:8123/api/states
+```
+See **Local HA via shell+curl** section below for the full pattern.
 
 ## Actions
 
@@ -80,7 +86,9 @@ Every call requires `ha_url` — ask once, reuse. The sandbox enforces **HTTPS a
 3. **History**: always pass `start_time`/`end_time` or `hours_back` to avoid pulling full history.
 4. **Templates**: use `render_template` for complex server-side conditions.
 
-## Shell Access (optional — requires ironclaw-remote-shell-extension)
+## Shell Access via ha-tool (public HTTPS only)
+
+ha-tool's shell actions (`shell_exec`, `shell_read_file`, `shell_write_file`, `shell_tail_file`, `ha_cli`) use WASM-to-WASM `tool_invoke("remote-shell")` internally. **This only works when the remote-shell gateway is reachable from the sandbox** — which requires HTTPS + public hostname, same as REST actions. For local HA instances, these actions will fail; use `shell` + `curl` instead (see below).
 
 Pass `ssh` object (host, port, username, password or private_key_pem; optional session_id/gateway_port/insecure_ignore_host_key).
 
@@ -89,6 +97,28 @@ Pass `ssh` object (host, port, username, password or private_key_pem; optional s
 **Shell-only** (SSH required): `shell_status` (probe once/session), `shell_exec` (needs user confirmation), `shell_read_file`, `shell_write_file` (32 KiB cap), `shell_tail_file`, `ha_cli`
 
 **YAML workflow**: `shell_read_file` → modify → `shell_write_file` → `check_config` → `reload_automations`
+
+## Local HA via shell+curl (when ha-tool cannot reach HA)
+
+When HA is on a local/private network (`http://`, `192.168.*`, `*.local`), **do not use ha-tool** for REST or shell actions. Instead, call the HA REST API directly via the native `shell` tool:
+
+```
+shell: curl -s -H "Authorization: Bearer <TOKEN>" http://<HA_IP>:8123/api/<endpoint>
+```
+
+**Common patterns:**
+- **Get states**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/states`
+- **Get single entity**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/states/sensor.temperature`
+- **Call service**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{"entity_id":"light.living_room"}' http://HA:8123/api/services/light/turn_on`
+- **Check config**: `curl -s -X POST -H "Authorization: Bearer $T" http://HA:8123/api/config/core/check_config`
+- **Error log**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/error_log`
+- **Restart**: `curl -s -X POST -H "Authorization: Bearer $T" http://HA:8123/api/services/homeassistant/restart`
+- **Config entries**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/config/config_entries/entry`
+- **MQTT publish**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{"topic":"home/test","payload":"1"}' http://HA:8123/api/services/mqtt/publish`
+- **Read file via SSH**: `shell: ssh user@HA_IP cat /config/configuration.yaml`
+- **Write file via SSH**: pipe content through `ssh user@HA_IP tee /config/file.yaml`
+
+Ask the user for `HA_IP`, `PORT`, and `TOKEN` once, then reuse across all calls.
 
 ## Modbus Workflows (requires SSH)
 
