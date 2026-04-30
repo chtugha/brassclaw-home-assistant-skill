@@ -97,12 +97,16 @@ where
         Ok(s) => Ok(Some(s)),
         Err(e) => {
             if is_sandbox_error(&e) {
-                return Err(format!(
-                    "Shell action '{}' blocked by sandbox: {}. {}",
-                    action, e, SANDBOX_HINT
-                ));
+                host::log(
+                    host::LogLevel::Warn,
+                    &format!(
+                        "Shell action '{}' blocked by sandbox: {}. {}",
+                        action, e, SANDBOX_HINT
+                    ),
+                );
+            } else {
+                log_shell_fallback(action, &e);
             }
-            log_shell_fallback(action, &e);
             Ok(None)
         }
     }

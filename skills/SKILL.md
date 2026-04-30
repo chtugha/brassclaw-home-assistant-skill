@@ -110,9 +110,9 @@ shell: curl -s -H "Authorization: Bearer <TOKEN>" http://<HA_IP>:8123/api/<endpo
 - **Get states**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/states`
 - **Get single entity**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/states/sensor.temperature`
 - **Call service**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{"entity_id":"light.living_room"}' http://HA:8123/api/services/light/turn_on`
-- **Check config**: `curl -s -X POST -H "Authorization: Bearer $T" http://HA:8123/api/config/core/check_config`
+- **Check config**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{}' http://HA:8123/api/config/core/check_config`
 - **Error log**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/error_log`
-- **Restart**: `curl -s -X POST -H "Authorization: Bearer $T" http://HA:8123/api/services/homeassistant/restart`
+- **Restart**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{}' http://HA:8123/api/services/homeassistant/restart`
 - **Config entries**: `curl -s -H "Authorization: Bearer $T" http://HA:8123/api/config/config_entries/entry`
 - **MQTT publish**: `curl -s -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{"topic":"home/test","payload":"1"}' http://HA:8123/api/services/mqtt/publish`
 - **Read file via SSH**: `shell: ssh user@HA_IP cat /config/configuration.yaml`
