@@ -20,24 +20,6 @@ step()  { printf "\n${BOLD}[%s/%s]${NC} %s\n" "$1" "$TOTAL_STEPS" "$2"; }
 
 TOTAL_STEPS=5
 
-supervisor_api() {
-    local method="$1" path="$2" ha_url="$3" token="$4"
-    shift 4
-    local url="${ha_url}/api/hassio${path}"
-    local args=(-s -S -o /dev/fd/3 -w "%{http_code}" \
-        -H "Authorization: Bearer ${token}" \
-        -H "Content-Type: application/json" \
-        -X "$method")
-    if [[ $# -gt 0 ]]; then
-        args+=(-d "$1")
-    fi
-    local body="" http_code=""
-    exec 3>&1
-    http_code=$(curl "${args[@]}" "$url") || { exec 3>&-; return 1; }
-    exec 3>&-
-    echo "$http_code"
-}
-
 supervisor_api_full() {
     local method="$1" path="$2" ha_url="$3" token="$4"
     shift 4
@@ -65,7 +47,8 @@ echo "  ${BOLD}Prerequisites:${NC}"
 echo "    - Home Assistant OS (Supervisor required)"
 echo "    - A free DuckDNS account (https://www.duckdns.org)"
 echo "    - A long-lived access token from HA"
-echo "    - Port 443 forwarded to your HA host (for initial cert issuance)"
+echo "    - Port 443 forwarded to your HA host (for HTTPS access after setup;"
+echo "      not needed for cert issuance — DuckDNS uses DNS-01 challenge)"
 echo ""
 
 # --- Step 1: Collect HA connection details ---
@@ -169,6 +152,10 @@ if [[ -z "$DUCK_SUBDOMAIN" ]]; then
 fi
 
 DUCK_SUBDOMAIN="${DUCK_SUBDOMAIN%.duckdns.org}"
+if [[ ! "$DUCK_SUBDOMAIN" =~ ^[a-zA-Z0-9-]+$ ]]; then
+    error "Subdomain must contain only letters, digits, and hyphens."
+    exit 1
+fi
 DUCK_DOMAIN="${DUCK_SUBDOMAIN}.duckdns.org"
 
 printf "  DuckDNS token: "
@@ -177,6 +164,10 @@ echo ""
 
 if [[ -z "$DUCK_TOKEN" ]]; then
     error "DuckDNS token is required."
+    exit 1
+fi
+if [[ ! "$DUCK_TOKEN" =~ ^[a-f0-9-]+$ ]]; then
+    error "DuckDNS token must be a UUID (hex digits and hyphens)."
     exit 1
 fi
 
@@ -268,7 +259,7 @@ echo "     ${DIM}  ssl_certificate: /ssl/fullchain.pem${NC}"
 echo "     ${DIM}  ssl_key: /ssl/privkey.pem${NC}"
 echo ""
 echo "  ${BOLD}2. Forward port 443 on your router to your HA host${NC}"
-echo "     (required for Let's Encrypt certificate issuance)"
+echo "     (required to access HA via HTTPS from outside your LAN)"
 echo ""
 echo "  ${BOLD}3. Restart Home Assistant${NC}"
 echo "     Settings → System → Restart"
@@ -282,10 +273,4 @@ echo "     ${GREEN}https://${DUCK_DOMAIN}${NC} as the URL."
 echo ""
 echo "  ${YELLOW}Note:${NC} The first certificate may take a few minutes to issue."
 echo "  Check the DuckDNS add-on logs if HTTPS doesn't work immediately."
-echo ""
-
-DUCK_URL="https://${DUCK_DOMAIN}"
-mkdir -p "$IRONCLAW_DIR"
-echo "$DUCK_URL" > "$HA_URL_FILE"
-info "Saved new HA URL: ${DUCK_URL}"
 echo ""
