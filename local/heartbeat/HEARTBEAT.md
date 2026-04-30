@@ -9,9 +9,9 @@ No changes are made without your explicit confirmation.
 
 ## API Call Method
 
-All checks use the native `shell` tool with `curl`. Ask the user for their
-HA long-lived access token once per session, then reuse it as `<TOKEN>` for
-all calls below.
+All checks use the native `shell` tool with `curl`. At tick start, read the
+stored token via `shell: cat ~/.ironclaw/.ha_token` and reuse it as `<TOKEN>`
+for all calls below. If the file is missing, ask the user for their token.
 
 ```
 curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/<endpoint>

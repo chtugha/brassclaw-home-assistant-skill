@@ -47,7 +47,12 @@ activation:
 
 # Home Assistant via shell+curl
 
-All HA API calls use the native `shell` tool with `curl`. Ask the user for their HA URL and long-lived access token once per session, then reuse for all calls.
+All HA API calls use the native `shell` tool with `curl`. At session start, read the stored token and URL:
+```
+shell: cat ~/.ironclaw/.ha_token
+shell: cat ~/.ironclaw/.ha_url
+```
+If either file is missing, ask the user for the value and reuse it for all calls.
 
 ## API Call Pattern
 
