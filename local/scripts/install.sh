@@ -128,6 +128,23 @@ replace_ha_url_placeholder() {
     fi
 }
 
+replace_ha_token_placeholder() {
+    local file="$1"
+    local token="$2"
+    if [[ -f "$file" ]]; then
+        if grep -q '{{HA_TOKEN}}' "$file" 2>/dev/null; then
+            local escaped_token
+            escaped_token="$(printf '%s' "$token" | sed 's/[&|\\]/\\&/g')"
+            if [[ "$(uname)" == "Darwin" ]]; then
+                sed -i '' "s|{{HA_TOKEN}}|${escaped_token}|g" "$file"
+            else
+                sed -i "s|{{HA_TOKEN}}|${escaped_token}|g" "$file"
+            fi
+            chmod 600 "$file"
+        fi
+    fi
+}
+
 if ! command -v ironclaw &>/dev/null; then
     error "ironclaw CLI not found."
     echo ""
@@ -318,6 +335,13 @@ mkdir -p "$IRONCLAW_DIR"
 echo "$token" > "$TOKEN_FILE"
 chmod 600 "$TOKEN_FILE"
 info "Token saved: $TOKEN_FILE"
+
+if [[ "$HEARTBEAT_STATUS" == "configured" ]]; then
+    replace_ha_token_placeholder "$HEARTBEAT_DEST" "$token"
+fi
+if [[ "$ROUTINES_STATUS" == "configured" ]]; then
+    replace_ha_token_placeholder "$ROUTINES_DEST" "$token"
+fi
 
 # --- Step 4: Environment variable guidance ---
 

@@ -1,7 +1,8 @@
-<!-- INSTALL_PREAMBLE: This file is a template. {{HA_URL}} placeholders are
-     replaced automatically by local/scripts/install.sh during installation.
-     If you are editing this file manually, replace every {{HA_URL}} with
-     your Home Assistant base URL (e.g. http://192.168.1.100:8123). -->
+<!-- INSTALL_PREAMBLE: This file is a template. {{HA_URL}} and {{HA_TOKEN}}
+     placeholders are replaced automatically by local/scripts/install.sh
+     during installation. If you are editing this file manually, replace
+     every {{HA_URL}} with your HA base URL and {{HA_TOKEN}} with your
+     long-lived access token. -->
 
 Ready-to-use prompts for creating scheduled monitoring jobs. Copy any
 prompt below, paste it into `ironclaw chat`, and the agent will set up
@@ -23,8 +24,8 @@ routine sends a notification and aborts.
 Create a cron routine named "ha-hourly-health" that runs at minute 5 of every
 hour. The job should:
 0. Tool check: try calling the http tool with
-   {"method":"GET","url":"{{HA_URL}}/api/","headers":[{"name":"Authorization","value":"Bearer <TOKEN>"}]}
-   If http returns an SSRF or HTTPS error, try shell: curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/
+   {"method":"GET","url":"{{HA_URL}}/api/","headers":[{"name":"Authorization","value":"Bearer {{HA_TOKEN}}"}]}
+   If http returns an SSRF or HTTPS error, try shell: curl -s -H "Authorization: Bearer {{HA_TOKEN}}" {{HA_URL}}/api/
    If neither tool works, send a notification: "ha-hourly-health: no usable
    tool. Set HTTP_ALLOW_LOCALHOST=true and restart IronClaw." Then abort.
 1. GET {{HA_URL}}/api/ — confirm HA is reachable
@@ -41,7 +42,7 @@ Never call any write endpoints without explicit user confirmation.
 Create a cron routine named "ha-daily-errors" that runs every day at 08:00.
 The job should:
 0. Tool check: try the http tool with a GET to {{HA_URL}}/api/ (with
-   Authorization: Bearer <TOKEN> header). If http fails with SSRF/HTTPS
+   Authorization: Bearer {{HA_TOKEN}} header). If http fails with SSRF/HTTPS
    error, fall back to shell+curl. If neither works, notify and abort.
 1. GET {{HA_URL}}/api/error_log
 2. Extract only ERROR and WARNING lines from the last 24 hours
@@ -55,7 +56,7 @@ The job should:
 Create a cron routine named "ha-weekly-updates" that runs every Monday at 09:00.
 The job should:
 0. Tool check: try the http tool with a GET to {{HA_URL}}/api/ (with
-   Authorization: Bearer <TOKEN> header). If http fails with SSRF/HTTPS
+   Authorization: Bearer {{HA_TOKEN}} header). If http fails with SSRF/HTTPS
    error, fall back to shell+curl. If neither works, notify and abort.
 1. GET {{HA_URL}}/api/states — filter for update.* entities where state == "on"
 2. For each available update, include attributes.title and
@@ -70,7 +71,7 @@ The job should:
 Create a cron routine named "ha-automation-health" that runs every 6 hours.
 The job should:
 0. Tool check: try the http tool with a GET to {{HA_URL}}/api/ (with
-   Authorization: Bearer <TOKEN> header). If http fails with SSRF/HTTPS
+   Authorization: Bearer {{HA_TOKEN}} header). If http fails with SSRF/HTTPS
    error, fall back to shell+curl. If neither works, notify and abort.
 1. GET {{HA_URL}}/api/states — filter for automation.* entities
 2. Flag automations with state="unavailable" or last_triggered older than 30 days
@@ -84,7 +85,7 @@ The job should:
 Create a cron routine named "ha-battery-check" that runs every day at 18:00.
 The job should:
 0. Tool check: try the http tool with a GET to {{HA_URL}}/api/ (with
-   Authorization: Bearer <TOKEN> header). If http fails with SSRF/HTTPS
+   Authorization: Bearer {{HA_TOKEN}} header). If http fails with SSRF/HTTPS
    error, fall back to shell+curl. If neither works, notify and abort.
 1. GET {{HA_URL}}/api/states — filter for entities with device_class "battery" and state < 20
 2. Notify the user with a list of devices needing batteries

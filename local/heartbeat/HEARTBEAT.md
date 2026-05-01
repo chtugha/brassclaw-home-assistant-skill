@@ -1,7 +1,8 @@
-<!-- INSTALL_PREAMBLE: This file is a template. {{HA_URL}} placeholders are
-     replaced automatically by local/scripts/install.sh during installation.
-     If you are editing this file manually, replace every {{HA_URL}} with
-     your Home Assistant base URL (e.g. http://192.168.1.100:8123). -->
+<!-- INSTALL_PREAMBLE: This file is a template. {{HA_URL}} and {{HA_TOKEN}}
+     placeholders are replaced automatically by local/scripts/install.sh
+     during installation. If you are editing this file manually, replace
+     every {{HA_URL}} with your HA base URL and {{HA_TOKEN}} with your
+     long-lived access token. -->
 
 IronClaw reads this file on every heartbeat tick (default: every 30 minutes).
 It runs read-only health checks, detects problems, and proposes fixes.
@@ -27,17 +28,17 @@ and restart IronClaw." Then skip all checks.
 At tick start, obtain the token and URL:
 - If `shell` is available: `shell: cat ~/.ironclaw/.ha_token` and
   `shell: cat ~/.ironclaw/.ha_url`
-- If only `http` is available: use the token and URL provided below
-  (injected by the install script).
+- If only `http` is available: the token and URL below were injected by
+  the install script — use them directly.
 
 **http tool** (Mode A):
 ```json
-{"method": "GET", "url": "{{HA_URL}}/api/<endpoint>", "headers": [{"name": "Authorization", "value": "Bearer <TOKEN>"}]}
+{"method": "GET", "url": "{{HA_URL}}/api/<endpoint>", "headers": [{"name": "Authorization", "value": "Bearer {{HA_TOKEN}}"}]}
 ```
 
 **shell tool** (Mode B):
 ```
-curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/<endpoint>
+curl -s -H "Authorization: Bearer {{HA_TOKEN}}" {{HA_URL}}/api/<endpoint>
 ```
 
 ## Confirmation Rules (MANDATORY)
@@ -77,7 +78,7 @@ curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/<endpoint>
 
 For domain filtering:
 - **http mode**: `GET /api/states` returns JSON directly — filter the response array for matching `entity_id` prefixes.
-- **shell mode**: pipe through `jq`: `curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/states | jq '[.[] | select(.entity_id | startswith("automation."))]'`
+- **shell mode**: pipe through `jq`: `curl -s -H "Authorization: Bearer {{HA_TOKEN}}" {{HA_URL}}/api/states | jq '[.[] | select(.entity_id | startswith("automation."))]'`
 
 ## Analysis & Proposal
 
