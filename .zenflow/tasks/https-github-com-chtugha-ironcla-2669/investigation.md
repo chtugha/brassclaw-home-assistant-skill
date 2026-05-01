@@ -1,295 +1,132 @@
 # Investigation — ha-tool ↔ remote-shell integration audit
 
-## Bug summary
+## Bug summary (updated — round 3)
 
-The remote-shell extension was updated to format all tool outputs as
-**human-readable text** (e.g. `"Exit code: 0\n--- stdout ---\n…"`,
-`"Connected successfully.\nSession ID: …"`), but `./tools-src/ha-tool/src/shell.rs`
-still parses every response as **raw JSON** with fields like
-`exit_code`, `stdout`, `stderr`, and `session_id`.
+The v0.5.0 refactor (commit `78b13fd`) removed `shell.rs` and all SSH
+subsystem code from ha-tool, replacing it with a "local extension" that
+tells the agent to use IronClaw's **built-in `shell` tool** with `curl`
+for local HA instances.
 
-As a result, **every shell-backed code path in `ha-tool` is broken**:
+Runtime error:
+```
+Tool 'shell' failed: Tool error: Tool shell not found.
+```
 
-- `shell_read_file`, `shell_write_file`, `shell_tail_file`, and `ha_cli` always
-  fail with `"invalid shell response: …"` because `parse_exec_output`
-  cannot find `exit_code` in a plain-text string.
-- Opening a new SSH session through ha-tool always fails with
-  `"remote-shell connect returned invalid JSON"`.
-- For `check_config`, `get_error_log`, `restart_ha` (the auto-shell-preferring
-  REST actions), `try_shell` swallows the parse error as a “shell unavailable”
-  signal and silently falls back to REST. The user’s SSH config is ignored.
-- For `restart_ha` (which uses `try_shell_strict`), the parse error
-  propagates instead of falling back, producing a confusing error
-  even though the gateway succeeded.
+## Root cause analysis (updated)
 
-There are also several secondary integration / quality issues uncovered
-during the audit (probe action, gateway-port propagation, magic numbers,
-unreachable size cap).
+The IronClaw `shell` tool (`src/tools/builtin/shell.rs`, name `"shell"`)
+is a **dev-domain tool** — it is only registered when
+`allow_local_tools = true`:
 
-## Root cause analysis
+| IronClaw mode | `allow_local_tools` default | `shell` available? |
+|---|---|---|
+| CLI (`ironclaw chat`) | `true` (Default impl) | Yes |
+| Server / relay / env | `false` (`parse_bool_env`, default false) | **No** |
 
-The two repos share a contract that has drifted:
+The local extension (`local/skills/SKILL.md`, `local/heartbeat/HEARTBEAT.md`,
+`local/heartbeat/routines.md`) instructs the agent to call the `shell` tool
+for every HA API interaction. When `shell` isn't registered, every call
+produces the `ToolError::NotFound { name: "shell" }` error.
 
-| Action          | remote-shell `output`                          | ha-tool expects                                        |
-|-----------------|------------------------------------------------|--------------------------------------------------------|
-| `connect`       | `"Connected successfully.\nSession ID: <id>\n<msg>\n\n…"` | JSON `{"session_id": "<id>", …}`                        |
-| `execute`       | `"Exit code: <n>\n--- stdout ---\n…--- stderr ---\n…"`     | JSON `{"exit_code": n, "stdout": "…", "stderr": "…"}`   |
-| `list_sessions` | `"Active sessions (N):\n…"` or `"No active sessions."`     | Any Ok (used only as a probe)                          |
-| `disconnect`    | `"Session '<id>' disconnected successfully."`              | (not invoked)                                          |
-| `health`        | `"Gateway is reachable at …"`                              | (not invoked — but should be the probe)                |
+### Why other tool paths don't work for local HA
 
-Two helpers in `./tools-src/ha-tool/src/shell.rs` rely on the obsolete
-JSON shape:
+| Tool | Reaches local HA? | Reason |
+|---|---|---|
+| `ha-tool` WASM | No | WASM sandbox blocks HTTP to private IPs / localhost |
+| `remote-shell` WASM | No | WASM sandbox blocks HTTP to 127.0.0.1 (gateway) |
+| Built-in `http` | No | SSRF protection blocks private IPs (unless `HTTP_ALLOW_LOCALHOST=true`) |
+| Built-in `shell` | **Yes** (CLI only) | Runs on host, can `curl` any address |
 
-1. `ensure_session` (lines 152–159) — `serde_json::from_str(&resp)` on text.
-2. `parse_exec_output` (lines 186–201) — same on every `shell_exec` result.
-
-Additional integration issues:
-
-3. `is_shell_available` (lines 49–53) probes via `list_sessions` (works,
-   but heavier than the new `health` action) and never propagates
-   `gateway_port`. With a non-default gateway port, the probe always
-   fails — every shell-aware call silently falls back to REST.
-4. `write_file` advertises `MAX_FILE_WRITE_LEN = 1 MiB`, but the bytes are
-   base64-encoded and stuffed into a shell command bounded by
-   `MAX_COMMAND_LEN = 64 KiB`. The reachable cap is ~48 KiB, the rest is
-   dead validation.
-5. `is_shell_available()` makes a network round-trip on every shell-aware
-   call. With multiple shell ops per heartbeat tick, this adds latency and
-   one extra gateway request per call. Should be cached per `execute`
-   invocation.
-6. `try_shell` swallows shell errors (including auth failures and unknown
-   sessions) into a `Warn` log and falls back to REST. From the user’s POV
-   the SSH path “just doesn’t work” — they get a REST result with no
-   indication their credentials were wrong. For `check_config` and
-   `get_error_log` this is acceptable; for explicitly shell-only ops
-   (write_file, ha_cli, …) the error path already propagates correctly.
-
-Plus a few low-severity items in the supporting material:
-
-7. `./skills/SKILL.md` doesn’t mention the new `health`-style probe
-   semantics or that `shell_status` already maps to the gateway probe.
-8. `./skills/SKILL.md` claims `shell_exec` is “root-equivalent” which is
-   true on Home Assistant OS / Supervised but **not** on a plain Linux
-   install where the SSH user may be unprivileged. Phrase as
-   “privileges of the SSH user (often root on HA OS)”.
-9. `./heartbeat/HEARTBEAT.md` references `heartbeat/ha-last-log.md` and
-   `heartbeat/ha-latest.md` paths but the install script doesn’t create
-   the `heartbeat/` directory under `~/.ironclaw`. The agent must `mkdir`
-   on first run, but this isn’t spelled out.
+The only viable path for local HA is the `shell` tool, which requires
+`allow_local_tools = true`. This is the default for CLI mode, but NOT
+for server/headless deployments — exactly the mode most HA monitoring
+users need.
 
 ## Affected components
 
-- `./tools-src/ha-tool/src/shell.rs` (primary)
-  - `ensure_session` — JSON parse on text response.
-  - `parse_exec_output` — JSON parse on text response.
-  - `is_shell_available` — wrong probe action, missing gateway-port.
-  - `write_file` — unreachable size cap (cosmetic but misleading).
-- `./tools-src/ha-tool/src/api.rs` — indirectly: every `try_shell(...)` /
-  `try_shell_strict(...)` site silently degrades to REST.
-- `./skills/SKILL.md` — minor wording fixes (`shell_status` description,
-  privilege framing).
-- `./heartbeat/HEARTBEAT.md` — minor: clarify directory creation.
-- No changes needed in `./wit/tool.wit`, `./tools-src/ha-tool/src/lib.rs`,
-  `./tools-src/ha-tool/src/types.rs`, capabilities JSON, or scripts.
+- `./local/scripts/install.sh` — does not verify `shell` tool availability
+- `./local/skills/SKILL.md` — assumes `shell` is always available, no
+  fallback or prerequisite guidance
+- `./local/heartbeat/HEARTBEAT.md` — same assumption
+- `./local/heartbeat/routines.md` — same assumption
+- `./scripts/install.sh` — post-install warning for local HA suggests
+  `./local/scripts/install.sh` but doesn't mention the `allow_local_tools`
+  requirement
 
 ## Proposed solution
 
-### A. Fix the wire format (critical)
+### A. Install script: verify shell tool availability
 
-Add a small helper in `./tools-src/ha-tool/src/shell.rs` that extracts the
-fields ha-tool needs from the **human-formatted** strings remote-shell now
-returns. Two parsers, both regex-free and string-based:
+Add a check to `local/scripts/install.sh` that runs
+`ironclaw tool list 2>/dev/null | grep -q shell` and warns if the shell
+tool isn't available, with instructions to either:
+1. Set `ALLOW_LOCAL_TOOLS=true` in the IronClaw config
+2. Or use the public HTTPS path with the main installer instead
 
-1. `parse_connect_response(&str) -> Result<String, String>` — scan for the
-   line beginning `"Session ID: "` and return the trimmed remainder.
-2. `parse_exec_output(&str) -> Result<(i32, String, String), String>` —
-   scan for `"Exit code: "` (numeric → `i32`, `unknown …` → `-1`),
-   then split off the `--- stdout ---` and `--- stderr ---` blocks
-   (each block is everything between its header and the next header /
-   end of string). Both blocks may be absent (the "(no output)" form).
+### B. SKILL.md: add prerequisites section
 
-Update call sites:
+Add a clear "Prerequisites" section to `local/skills/SKILL.md` that
+explains the `shell` tool dependency and what to do when it's unavailable.
+Include a graceful fallback: if `shell` isn't available, tell the user
+the local extension can't function and suggest switching to the HTTPS
+path.
 
-- `ensure_session` — replace `serde_json::from_str` with
-  `parse_connect_response`.
-- `read_file`, `write_file`, `tail_file` — keep using `parse_exec_output`
-  (now text-based).
-- `ha_cli` returns `shell_exec`’s raw text directly — fine, the agent
-  reads the formatted string.
+### C. HEARTBEAT.md / routines.md: add prerequisites
 
-### B. Use `health` as the probe action
+Same prerequisite note in both heartbeat files so the agent doesn't
+blindly attempt `shell` calls during heartbeat ticks.
 
-Replace the `list_sessions` probe with `health` and forward
-`gateway_port`:
+### D. Main install script: improve local HA warning
 
-```rust
-fn is_shell_available(gateway_port: Option<u16>) -> bool {
-    let mut body = serde_json::json!({"action": "health"});
-    if let Some(p) = gateway_port { body["gateway_port"] = p.into(); }
-    host::tool_invoke(REMOTE_SHELL_ALIAS, &body.to_string()).is_ok()
-}
-```
+The main `scripts/install.sh` warns local HA users to use the local
+installer. Add a note that the local installer requires
+`allow_local_tools = true`.
 
-Thread `gateway_port` through `try_shell` and `try_shell_strict` so the
-probe targets the same gateway the actual command will hit.
+## Edge cases
 
-### C. Cache the probe within a single tool invocation
+- Users running `ironclaw chat` (CLI mode) should not be affected — the
+  `shell` tool is available by default.
+- The install script check is advisory — if the user configures
+  `allow_local_tools` after install, the extension starts working without
+  reinstalling.
+- Token storage in `~/.ironclaw/.ha_token` is a plaintext file, not in
+  IronClaw's encrypted secret store. This is by design for the local
+  extension (no WASM tool = no `ironclaw tool auth`), but should be
+  noted in the prerequisites.
 
-Run the probe at most once per `execute_inner` call. Easiest: pass an
-`Option<bool>` flag down, or memoize via a `thread_local!` cell that
-`HaTool::execute` clears at entry. Picking the flag-based approach to
-keep behaviour explicit.
+## Implementation notes (round 3)
 
-### D. Fix the dead-code / magic-number cap on `write_file`
+Applied fixes for the `Tool shell not found` issue:
 
-Either:
-- lower `MAX_FILE_WRITE_LEN` to a value actually reachable through
-  `MAX_COMMAND_LEN` (≈ `(MAX_COMMAND_LEN - 64) * 3 / 4` ≈ 49 000), **or**
-- chunk the write across multiple `execute` calls.
+- **`./local/scripts/install.sh`**: Added pre-flight check that runs
+  `ironclaw tool list | grep shell` to detect whether the `shell` tool
+  is registered. If not found, displays a clear warning explaining:
+  - The local extension requires `allow_local_tools = true`
+  - CLI mode has it by default, server mode needs `ALLOW_LOCAL_TOOLS=true`
+  - Alternative: use HTTPS remote extension
+  Prompts user to confirm before continuing. Post-install summary also
+  shows a reminder if `shell` was not detected.
 
-The simplest correct fix is to lower the cap and document it in the
-error message. Chunking adds non-trivial atomicity concerns (we’d need
-a temp file + `mv`) and is outside the current scope.
+- **`./local/skills/SKILL.md`**: Added "Prerequisites" section at the top
+  explaining the `shell` tool requirement, when it's available, and what
+  the agent should do if it gets "Tool shell not found" (report to user
+  with fix instructions, do not retry).
 
-### E. Skill / heartbeat copy fixes
+- **`./local/heartbeat/HEARTBEAT.md`**: Added "Prerequisites" section
+  instructing the agent to skip all checks and notify the user if the
+  `shell` tool is unavailable.
 
-- `./skills/SKILL.md`:
-  - Reword `shell_exec` privileges: “runs with the privileges of the SSH
-    user (typically root on HA OS / Supervised)”.
-  - Add `shell_status` returns a JSON object including
-    `remote_shell_available`; agents should check this before opting
-    into shell-aware actions on a fresh session.
-- `./heartbeat/HEARTBEAT.md`: note that `heartbeat/ha-last-log.md` and
-  `heartbeat/ha-latest.md` are workspace-relative paths; the agent must
-  create the directory on first tick.
+- **`./local/heartbeat/routines.md`**: Added prerequisite note explaining
+  that all routines require `allow_local_tools = true` and will fail
+  without it.
 
-### F. Regression tests
+- **`./scripts/install.sh`**: Updated the local HA warning to mention
+  that the local installer requires the `shell` tool and
+  `ALLOW_LOCAL_TOOLS=true` for server mode.
 
-Add unit tests in `./tools-src/ha-tool/src/shell.rs::tests` for:
+## Test results (round 3)
 
-- `parse_connect_response` happy path + missing line.
-- `parse_exec_output` for each shape: stdout-only, stderr-only,
-  both, "(no output)", `Exit code: unknown …`.
-- Round-trip: feed the literal strings remote-shell produces (copied
-  verbatim from `format_connect_response` / `format_execute_response`)
-  and assert the parsed values.
-
-These tests fail before the fix (current code calls
-`serde_json::from_str` on text) and pass after.
-
-## Edge cases & side effects
-
-- remote-shell may evolve again — the parser should accept extra trailing
-  lines (e.g. the “Use this session_id…” suffix on connect) without
-  breaking. We ignore everything we don’t recognise.
-- A successful `Exit code: 0` with empty output yields the “(no output)”
-  branch in remote-shell. `parse_exec_output` must treat that as
-  `(0, "", "")`, not an error.
-- `Exit code: unknown (command may have timed out)` → map to `-1` so
-  call sites observe a non-zero exit and surface the stderr (typically
-  empty) along with the timeout indicator preserved in the raw body
-  used by `ha_cli`.
-- For `read_file`, the file content is now embedded inside a
-  text-formatted block. Currently `read_file` returns
-  `{"path": …, "content": stdout}`. We keep that envelope; `stdout`
-  comes from the text parser.
-- For `write_file`, the lowered cap is a behaviour change — but the
-  current advertised cap is unreachable, so users hitting >49 KiB
-  already see opaque “command too long” errors. The new error message
-  will be clearer.
-- The `health`-based probe means callers using a non-default
-  `gateway_port` will now correctly detect availability. No regression.
-- All existing `cargo test` cases for `api.rs` continue to pass — the
-  fix is contained to `shell.rs`.
-
-## Implementation notes
-
-Applied in this session:
-
-- **A. Wire-format parsers** — `./tools-src/ha-tool/src/shell.rs`:
-  - Added `parse_connect_response(&str)` extracting the session id from the
-    `Session ID: <id>` line; tolerates extra surrounding lines.
-  - Replaced `parse_exec_output` with a text-based parser that reads
-    `Exit code: <n|unknown ...>` and slices `--- stdout ---` / `--- stderr ---`
-    blocks. Strips exactly one separator newline between blocks so a
-    round-trip through `format_execute_response` is byte-exact.
-  - `ensure_session` now calls `parse_connect_response` instead of
-    `serde_json::from_str`.
-- **B. `health` probe + gateway-port propagation** — `is_shell_available`
-  now takes `Option<u16>` and invokes `{"action": "health", "gateway_port": …}`.
-  `try_shell` and `try_shell_strict` forward `cfg.gateway_port`. No call-site
-  change needed in `./tools-src/ha-tool/src/api.rs`.
-- **C. Probe caching** — Confirmed every `execute_inner` invocation issues
-  at most one `try_shell` (one shell HaAction maps to one match arm), so the
-  probe already runs at most once per call. No caching layer added (would be
-  dead code in the current call graph).
-- **D. Reachable write cap** — Lowered `MAX_FILE_WRITE_LEN` from 1 MiB to
-  32 KiB. Added `test_max_file_write_len_fits_in_command_budget` that asserts
-  a worst-case (`MAX_PATH_LEN` path + skeleton + base64 payload) command
-  stays under `MAX_COMMAND_LEN`. Error message now reports the actual size
-  and recommends chunking.
-- **E. Doc fixes** — `./skills/SKILL.md`: reworded `shell_exec` privileges
-  to mention "privileges of the SSH user (typically root on HA OS /
-  Supervised)", documented the new 32 KiB `shell_write_file` cap, and noted
-  that `shell_status` returns `remote_shell_available`.
-  `./heartbeat/HEARTBEAT.md`: clarified that the workspace-relative
-  `heartbeat/` directory must be created on first tick.
-
-## Review follow-ups (round 2)
-
-Addressed during code-review pass:
-
-- **Strict body validation in `parse_exec_output`** — When the body is
-  non-empty, isn't `(no output)`, and contains no recognisable
-  `--- stdout ---` / `--- stderr ---` marker, return an `Err` with the
-  raw body instead of silently yielding `("", "")`. Prevents `read_file`
-  / `tail_file` from returning empty content as a successful result if
-  the wire format ever drifts again.
-- **`shell_status` honours `gateway_port`** — Added `gateway_port:
-  Option<u16>` to the `ShellStatus` action variant; `lib.rs` forwards it
-  to `shell::shell_status`, which forwards it to `is_shell_available`.
-  Avoids false-negative availability reports when the remote-shell
-  gateway runs on a non-default port.
-- **`ha_cli` doc comment** — Added a doc comment explaining the deliberate
-  inconsistency: `ha_cli` returns `shell_exec`'s raw human-formatted text
-  verbatim (rather than a JSON envelope) so agents can surface the full
-  output, including timeout indicators and stderr, to the user.
-- **Test alignment with canonical wire format** — Renamed the dual-stream
-  test pair: `test_parse_exec_output_both_streams` now uses the
-  no-trailing-newline form (single `\n` separator) that the formatter
-  produces for stdout content without a trailing `\n`, and
-  `test_parse_exec_output_both_streams_trailing_newline` covers the
-  trailing-newline form (two `\n` chars before the next marker). Both
-  exercise output the remote-shell extension actually emits.
-- **New regression test** — `test_parse_exec_output_unknown_body_is_err`
-  asserts that footer-only / unknown-format bodies surface as `Err`.
-
-## Test results
-
-`cargo test --lib` — **28 passed, 0 failed**. New regression tests (all
-fail against the pre-fix JSON-based implementation, pass after):
-
-- `test_parse_connect_response_happy_path`
-- `test_parse_connect_response_missing_line`
-- `test_parse_connect_response_empty_id`
-- `test_parse_exec_output_no_output`
-- `test_parse_exec_output_stdout_only`
-- `test_parse_exec_output_stderr_only`
-- `test_parse_exec_output_both_streams`
-- `test_parse_exec_output_unknown_exit_code`
-- `test_parse_exec_output_invalid_header`
-- `test_parse_exec_output_roundtrip_format` (mirrors the remote-shell
-  formatter to detect future drift)
-- `test_max_file_write_len_fits_in_command_budget`
-
-`cargo build --target wasm32-wasip2 --release` — succeeds.
-
-## Out of scope
-
-- Adding a `disconnect` action to ha-tool (sessions already TTL-out on
-  the gateway).
-- Adding a `health` passthrough action to ha-tool (`shell_status`
-  already covers this).
-- Refactoring `try_shell` / `try_shell_strict` semantics (current split
-  is intentional — destructive ops shouldn’t fall back silently).
+- `cargo test --lib` — **23 passed, 0 failed** (ha-tool tests)
+- `cargo build --target wasm32-wasip2 --release` — succeeds
+- `bash -n local/scripts/install.sh` — syntax OK
+- `bash -n scripts/install.sh` — syntax OK

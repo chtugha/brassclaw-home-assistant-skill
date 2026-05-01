@@ -78,3 +78,14 @@ The `skill_registry` field in `AgentDeps` (`Option<Arc<RwLock<SkillRegistry>>>`)
 - **Verified tri-state tracking**: `not_found`/`skipped`/`configured` states correctly mapped in summary output for all three file types (skill, heartbeat, routines)
 - **Verified extract_skill_version**: Properly placed in helper functions section, empty-version edge case handled with clear warning message
 - **All bash syntax validated**: `bash -n` passes clean
+
+### [x] Step: Fix "Tool shell not found" root cause — dual-mode migration
+- **Root cause identified**: IronClaw's `shell` tool is only registered at startup via `register_dev_tools()` when `allow_local_tools=true`. If the setting is toggled after startup (e.g., via web UI), or in certain worker contexts (routines, jobs), the shell tool is not available.
+- **Solution discovered**: IronClaw's built-in `http` tool (always registered via `register_builtin_tools()`) has an `HTTP_ALLOW_LOCALHOST=true` env var that bypasses HTTPS-only and SSRF restrictions. This makes it work with local HTTP HA instances on private IPs.
+- **IronClaw source verified**: Read `src/tools/builtin/http.rs` — confirmed `allow_localhost()` function reads `HTTP_ALLOW_LOCALHOST` env var via `OnceLock`, bypasses `validate_url()` HTTPS check and `validate_and_resolve_url()` SSRF IP check.
+- **SKILL.md rewritten to dual-mode (v0.6.0)**: Agent tries `http` tool first, falls back to `shell+curl`. Clear decision logic and API call patterns for both modes.
+- **HEARTBEAT.md updated**: Dual-mode tool selection, `http` tool examples added alongside shell.
+- **routines.md updated**: All 5 cron routines rewritten with dual-mode step-0 tool check (try http, fall back to shell, abort with clear message if neither works).
+- **install.sh updated**: Added step 4 for env var guidance. Detects `HTTP_ALLOW_LOCALHOST` and `shell` availability. Provides specific setup instructions for CLI, systemd, .env, and Docker.
+- **README.md updated**: Troubleshooting table now has "Tool shell not found" as first entry with clear fix. All sections updated to reflect dual-mode. Project structure comments updated.
+- **Bash syntax validated**: `bash -n` passes clean

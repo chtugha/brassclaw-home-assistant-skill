@@ -1,7 +1,7 @@
 ---
 name: home-assistant-local
-version: 0.5.0
-description: Control local Home Assistant via native shell+curl - lights, climate, switches, automations, scripts, scenes, MQTT, Modbus, and system management
+version: 0.6.0
+description: Control local Home Assistant via built-in http tool or shell+curl - lights, climate, switches, automations, scripts, scenes, MQTT, Modbus, and system management
 activation:
   keywords:
     - home assistant
@@ -45,35 +45,48 @@ activation:
   max_context_tokens: 2000
 ---
 
-# Home Assistant via shell+curl
+# Home Assistant — Local Extension
 
-## Prerequisites
+## Tool Selection (IMPORTANT)
 
-This extension requires IronClaw's built-in `shell` tool (a dev-domain tool). It is available by default in CLI mode (`ironclaw chat`) but NOT in server/relay mode unless `ALLOW_LOCAL_TOOLS=true` is set.
+This extension supports two modes. At session start, determine which to use:
 
-If the `shell` tool is not available (you get "Tool shell not found"), tell the user:
-1. Set `ALLOW_LOCAL_TOOLS=true` in their IronClaw server config and restart, OR
-2. Switch to the HTTPS remote extension: expose HA via Nabu Casa or DuckDNS, then run `./scripts/install.sh`
+**Mode A — `http` tool (preferred)**: IronClaw's built-in `http` tool is always available in every context (CLI, server, routines, jobs). Requires `HTTP_ALLOW_LOCALHOST=true` in the IronClaw environment to allow HTTP and private-IP requests. If the `http` tool returns "only https URLs are allowed" or "private or local IPs are not allowed", tell the user to set `HTTP_ALLOW_LOCALHOST=true` and restart IronClaw.
 
-Do NOT attempt shell calls if the tool is unavailable — report the prerequisite issue instead.
+**Mode B — `shell` tool (fallback)**: Uses `shell` with `curl`. Only available when `allow_local_tools = true` is set at IronClaw startup. If you get "Tool shell not found", switch to Mode A.
+
+**Decision logic**: Try `http` first. If it fails due to SSRF/HTTPS restrictions, try `shell`. If neither works, tell the user which env vars to set.
 
 ## Setup
 
-All HA API calls use the native `shell` tool with `curl`. At session start, read the stored token and URL:
+At session start, obtain the HA URL and token:
+
+**If `shell` is available:**
 ```
 shell: cat ~/.ironclaw/.ha_token
 shell: cat ~/.ironclaw/.ha_url
 ```
-If either file is missing, ask the user for the value and reuse it for all calls.
 
-## API Call Pattern
+**If only `http` is available:** Ask the user for their HA URL and long-lived access token. Reuse both for all subsequent calls.
+
+## API Call Patterns
+
+### Mode A — http tool
+
+GET request:
+```json
+{"method": "GET", "url": "<HA_URL>/api/<endpoint>", "headers": [{"name": "Authorization", "value": "Bearer <TOKEN>"}]}
+```
+
+POST request:
+```json
+{"method": "POST", "url": "<HA_URL>/api/<endpoint>", "headers": [{"name": "Authorization", "value": "Bearer <TOKEN>"}, {"name": "Content-Type", "value": "application/json"}], "body": <JSON_OBJECT>}
+```
+
+### Mode B — shell tool
 
 ```
 shell: curl -s -H "Authorization: Bearer <TOKEN>" <HA_URL>/api/<endpoint>
-```
-
-For POST requests:
-```
 shell: curl -s -X POST -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" -d '<JSON>' <HA_URL>/api/<endpoint>
 ```
 
@@ -111,12 +124,12 @@ shell: curl -s -X POST -H "Authorization: Bearer <TOKEN>" -H "Content-Type: appl
 
 ## Workflow
 
-1. **Discover**: `GET /api/states` then filter by domain prefix (e.g. `light.`, `sensor.`). Use `jq` for filtering: `curl ... | jq '[.[] | select(.entity_id | startswith("light."))]'`
+1. **Discover**: `GET /api/states` then filter response by domain prefix (e.g. `light.`, `sensor.`). With shell mode, use `jq` for filtering: `curl ... | jq '[.[] | select(.entity_id | startswith("light."))]'`. With http mode, parse the JSON response directly.
 2. **Control**: `POST /api/services/<domain>/<service>` for any HA service
 3. **History**: always pass time bounds to avoid pulling full history
 4. **Templates**: use `POST /api/template` for complex server-side conditions
 
-## File Access via SSH
+## File Access via SSH (requires shell tool)
 
 - **Read config**: `shell: ssh user@HA_IP cat /config/configuration.yaml`
 - **Write config**: pipe content through `shell: ssh user@HA_IP tee /config/file.yaml`
@@ -124,7 +137,7 @@ shell: curl -s -X POST -H "Authorization: Bearer <TOKEN>" -H "Content-Type: appl
 
 ## Modbus Workflows
 
-### 1. Scan a Modbus device for registers
+### 1. Scan a Modbus device (requires shell tool)
 
 Use SSH to probe registers. Prefer `modpoll` (install: `pip install modpoll`). Fall back to Python `pymodbus` one-liners.
 
@@ -167,9 +180,8 @@ When the user provides a device PDF or register table:
    - `scale`/`offset` for unit conversion (e.g. raw value x 0.1 = C)
    - `scan_interval` for poll frequency
 3. Generate the YAML stanzas
-4. Read existing config: `ssh user@HA cat /config/configuration.yaml` (or the modbus include file)
-5. Merge new entries under the correct hub - never duplicate addresses
-6. Write back via SSH -> check config -> reload
+4. If shell is available: read existing config via SSH, merge, write back, check config, reload
+5. If shell is unavailable: show the YAML to the user for manual integration
 
 Example generated entry:
 ```yaml
@@ -194,7 +206,7 @@ modbus:
 1. `GET /api/error_log` - look for `Modbus` / `pymodbus` errors
 2. `GET /api/config/config_entries/entry?domain=modbus` - get the hub's `entry_id`
 3. Common fixes:
-   - **Timeout / connection refused**: check host:port reachability via `ssh user@HA nc -z <host> <port>`
+   - **Timeout / connection refused**: if shell available, check via `ssh user@HA nc -z <host> <port>`. Otherwise, ask user to verify connectivity manually.
    - **Illegal data address**: register doesn't exist on device - remove from config or fix address
    - **Slave failure**: device overloaded - increase `scan_interval` or reduce register count
    - **CRC error** (RTU): wiring/baud rate issue - check serial config
@@ -202,4 +214,4 @@ modbus:
 
 ## HA MCP Server
 
-If the HA MCP Server integration is enabled, use both: MCP for conversational Assist entities, shell+curl for everything else (maintenance, reloads, MQTT, Modbus, error logs, restart).
+If the HA MCP Server integration is enabled, use both: MCP for conversational Assist entities, this extension for everything else (maintenance, reloads, MQTT, Modbus, error logs, restart).

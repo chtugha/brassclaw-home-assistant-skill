@@ -18,7 +18,7 @@ warn()  { printf "${YELLOW}WARNING:${NC} %s\n" "$1"; }
 error() { printf "${RED}ERROR:${NC} %s\n" "$1" >&2; }
 step()  { printf "\n${BOLD}[%s/%s]${NC} %s\n" "$1" "$TOTAL_STEPS" "$2"; }
 
-TOTAL_STEPS=3
+TOTAL_STEPS=4
 
 validate_ha_url() {
     local url="$1"
@@ -136,6 +136,11 @@ if ! command -v ironclaw &>/dev/null; then
     exit 1
 fi
 
+HTTP_ALLOW_LOCALHOST_SET=false
+if [[ "${HTTP_ALLOW_LOCALHOST:-}" == "true" ]] || [[ "${HTTP_ALLOW_LOCALHOST:-}" == "1" ]]; then
+    HTTP_ALLOW_LOCALHOST_SET=true
+fi
+
 SHELL_TOOL_AVAILABLE=false
 if ironclaw tool list 2>/dev/null | grep -q '\bshell\b'; then
     SHELL_TOOL_AVAILABLE=true
@@ -145,37 +150,48 @@ echo ""
 echo "  ${BOLD}IronClaw Home Assistant Extension — Local Installer${NC}"
 echo "  ────────────────────────────────────────────────────"
 echo ""
-echo "  This installer sets up the local HA extension (shell+curl)."
-echo "  No WASM tool or build step required."
+echo "  This extension uses IronClaw's built-in tools to call your local"
+echo "  HA REST API. No WASM build step required."
+echo ""
+echo "  ${BOLD}Two tool modes are supported:${NC}"
+echo "    A. ${BOLD}http${NC} tool (preferred) — always available, needs"
+echo "       ${BOLD}HTTP_ALLOW_LOCALHOST=true${NC} in the environment"
+echo "    B. ${BOLD}shell${NC} tool (fallback) — needs ${BOLD}allow_local_tools = true${NC}"
+echo "       at IronClaw startup"
 
-if [[ "$SHELL_TOOL_AVAILABLE" != "true" ]]; then
+if [[ "$HTTP_ALLOW_LOCALHOST_SET" != "true" && "$SHELL_TOOL_AVAILABLE" != "true" ]]; then
     echo ""
-    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo "  ${YELLOW}  WARNING: Built-in 'shell' tool not found${NC}"
-    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "  ${YELLOW}  WARNING: Neither tool mode is currently configured${NC}"
+    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo "  The local extension requires IronClaw's built-in 'shell' tool,"
-    echo "  which is only available when ${BOLD}allow_local_tools = true${NC}."
+    echo "  To make the extension work, set at least one of:"
     echo ""
-    echo "  This is the default for ${BOLD}ironclaw chat${NC} (CLI mode), but"
-    echo "  server/relay deployments disable it by default."
+    echo "  ${BOLD}Option A (recommended):${NC}"
+    echo "    Add ${BOLD}HTTP_ALLOW_LOCALHOST=true${NC} to your IronClaw"
+    echo "    environment and restart. This enables the built-in http tool"
+    echo "    to reach local HTTP addresses and private IPs."
     echo ""
-    echo "  To fix:"
-    echo "    • CLI mode: the shell tool should be available automatically."
-    echo "      Run ${BOLD}ironclaw tool list${NC} to verify."
-    echo "    • Server mode: set ${BOLD}ALLOW_LOCAL_TOOLS=true${NC} in your"
-    echo "      environment or IronClaw config, then restart the server."
+    echo "  ${BOLD}Option B:${NC}"
+    echo "    Set ${BOLD}ALLOW_LOCAL_TOOLS=true${NC} in your IronClaw config"
+    echo "    and restart. This enables the shell tool for curl calls."
+    echo "    Note: the shell tool is only registered at startup."
     echo ""
-    echo "  Alternatively, expose HA via HTTPS (Nabu Casa or DuckDNS)"
-    echo "  and use the remote installer instead: ${BOLD}./scripts/install.sh${NC}"
-    echo ""
-    printf "  Continue anyway? [y/N]: "
+    printf "  Continue with installation anyway? [y/N]: "
     read -r cont
     if [[ ! "$cont" =~ ^[Yy]$ ]]; then
         echo ""
         info "Installation cancelled."
         exit 0
     fi
+elif [[ "$HTTP_ALLOW_LOCALHOST_SET" == "true" ]]; then
+    echo ""
+    echo "  ${GREEN}✓ HTTP_ALLOW_LOCALHOST=true detected — http tool mode ready${NC}"
+elif [[ "$SHELL_TOOL_AVAILABLE" == "true" ]]; then
+    echo ""
+    echo "  ${GREEN}✓ shell tool detected — shell mode ready${NC}"
+    echo "  ${YELLOW}  Tip: also set HTTP_ALLOW_LOCALHOST=true for more reliable${NC}"
+    echo "  ${YELLOW}  operation in routines and server mode.${NC}"
 fi
 
 # --- Step 1: Prompt for Home Assistant URL ---
@@ -186,7 +202,7 @@ info "URL saved: $HA_URL"
 
 # --- Step 2: Install skill, heartbeat, and routines ---
 
-step 2 "Installing skill and heartbeat files..."
+step 2 "Installing skill, heartbeat, and routine files..."
 
 REMOTE_SKILL_DIR="$IRONCLAW_DIR/skills/home-assistant"
 if [[ -d "$REMOTE_SKILL_DIR" ]]; then
@@ -303,6 +319,31 @@ echo "$token" > "$TOKEN_FILE"
 chmod 600 "$TOKEN_FILE"
 info "Token saved: $TOKEN_FILE"
 
+# --- Step 4: Environment variable guidance ---
+
+step 4 "Checking environment configuration..."
+
+ENV_ACTIONS_NEEDED=false
+if [[ "$HTTP_ALLOW_LOCALHOST_SET" != "true" ]]; then
+    ENV_ACTIONS_NEEDED=true
+    echo ""
+    echo "  ${YELLOW}Action needed:${NC} Add ${BOLD}HTTP_ALLOW_LOCALHOST=true${NC} to your"
+    echo "  IronClaw environment. This lets the built-in http tool reach"
+    echo "  your local HA instance — it works in all contexts (CLI, server,"
+    echo "  routines, jobs) without needing the shell tool."
+    echo ""
+    echo "  How to set it:"
+    echo "    • ${BOLD}CLI:${NC}      export HTTP_ALLOW_LOCALHOST=true"
+    echo "    • ${BOLD}systemd:${NC}  add Environment=HTTP_ALLOW_LOCALHOST=true"
+    echo "                  to your ironclaw.service unit file"
+    echo "    • ${BOLD}.env:${NC}     add HTTP_ALLOW_LOCALHOST=true to your .env"
+    echo "    • ${BOLD}Docker:${NC}   add -e HTTP_ALLOW_LOCALHOST=true"
+    echo ""
+    echo "  Then restart IronClaw."
+else
+    info "HTTP_ALLOW_LOCALHOST=true is set — http tool mode active."
+fi
+
 # --- Done ---
 
 echo ""
@@ -314,16 +355,13 @@ echo "  ${BOLD}Quick test:${NC}"
 echo "    ironclaw chat"
 echo "    > Is my Home Assistant at ${HA_URL} online?"
 echo ""
-echo "  The agent will use shell+curl to call your HA REST API directly."
-echo "  No WASM sandbox restrictions — works with any local HA instance."
-echo ""
-echo "  ${BOLD}Requirement:${NC} IronClaw's built-in 'shell' tool must be available."
-echo "  In CLI mode (ironclaw chat) it is enabled by default."
-echo "  In server mode, set ${BOLD}ALLOW_LOCAL_TOOLS=true${NC} in your config."
-if [[ "$SHELL_TOOL_AVAILABLE" != "true" ]]; then
+echo "  ${BOLD}Tool modes:${NC}"
+echo "    • ${BOLD}http tool${NC} (preferred): set HTTP_ALLOW_LOCALHOST=true"
+echo "    • ${BOLD}shell tool${NC} (fallback): set ALLOW_LOCAL_TOOLS=true"
+echo "  The agent tries http first, falls back to shell automatically."
+if [[ "$ENV_ACTIONS_NEEDED" == "true" ]]; then
     echo ""
-    echo "  ${YELLOW}⚠  The 'shell' tool was NOT detected during install.${NC}"
-    echo "  ${YELLOW}   See the warning above for how to enable it.${NC}"
+    echo "  ${YELLOW}⚠  Remember to set HTTP_ALLOW_LOCALHOST=true and restart!${NC}"
 fi
 echo ""
 echo "  ${BOLD}Configuration saved:${NC}"

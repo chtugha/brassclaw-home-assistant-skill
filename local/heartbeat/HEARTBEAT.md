@@ -7,21 +7,35 @@ IronClaw reads this file on every heartbeat tick (default: every 30 minutes).
 It runs read-only health checks, detects problems, and proposes fixes.
 No changes are made without your explicit confirmation.
 
-## Prerequisites
+## Tool Selection
 
-This heartbeat requires IronClaw's built-in `shell` tool. It is available
-by default in CLI mode (`ironclaw chat`) but NOT in server/relay mode
-unless `ALLOW_LOCAL_TOOLS=true` is set. If the `shell` tool is unavailable,
-skip all checks and notify the user that the local HA heartbeat cannot run
-without the `shell` tool — suggest setting `ALLOW_LOCAL_TOOLS=true` or
-switching to the HTTPS remote extension.
+This heartbeat supports two modes:
+
+**Mode A — `http` tool (preferred)**: Always available. Requires
+`HTTP_ALLOW_LOCALHOST=true` in the IronClaw environment.
+
+**Mode B — `shell` tool (fallback)**: Requires `allow_local_tools = true`
+at IronClaw startup.
+
+At tick start, try the `http` tool first. If it returns an SSRF/HTTPS
+restriction error, fall back to `shell`. If neither works, send a single
+notification: "HA heartbeat: no usable tool. Set HTTP_ALLOW_LOCALHOST=true
+and restart IronClaw." Then skip all checks.
 
 ## API Call Method
 
-All checks use the native `shell` tool with `curl`. At tick start, read the
-stored token via `shell: cat ~/.ironclaw/.ha_token` and reuse it as `<TOKEN>`
-for all calls below. If the file is missing, ask the user for their token.
+At tick start, obtain the token and URL:
+- If `shell` is available: `shell: cat ~/.ironclaw/.ha_token` and
+  `shell: cat ~/.ironclaw/.ha_url`
+- If only `http` is available: use the token and URL provided below
+  (injected by the install script).
 
+**http tool** (Mode A):
+```json
+{"method": "GET", "url": "{{HA_URL}}/api/<endpoint>", "headers": [{"name": "Authorization", "value": "Bearer <TOKEN>"}]}
+```
+
+**shell tool** (Mode B):
 ```
 curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/<endpoint>
 ```
@@ -61,10 +75,9 @@ curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/<endpoint>
 - [ ] `GET /api/states` filtered for `sensor.*` — flag any sensor in state
       `"unavailable"` or `"unknown"`.
 
-Use `jq` for domain filtering:
-```
-curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/states | jq '[.[] | select(.entity_id | startswith("automation."))]'
-```
+For domain filtering:
+- **http mode**: `GET /api/states` returns JSON directly — filter the response array for matching `entity_id` prefixes.
+- **shell mode**: pipe through `jq`: `curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/states | jq '[.[] | select(.entity_id | startswith("automation."))]'`
 
 ## Analysis & Proposal
 
@@ -115,9 +128,9 @@ corresponding endpoint. Common remediations:
 
 ## Rate Limits
 
-- Use at most 8 curl calls per heartbeat tick to stay within typical LLM
-  budgets. Combine state queries using `jq` filtering on a single
-  `GET /api/states` call rather than individual entity fetches.
+- Use at most 8 API calls per heartbeat tick to stay within typical LLM
+  budgets. Combine state queries by filtering a single `GET /api/states`
+  response rather than individual entity fetches.
 
 ## Token Budget (target — 1024 tokens per tick)
 
@@ -127,8 +140,8 @@ heartbeat tick should fit tool outputs + analysis + notification into
 
 Enforce by:
 
-- Use `jq` to extract only relevant fields from state responses.
-- Use `tail -n 40` or equivalent to limit error log output.
+- Extract only relevant fields from state responses (use `jq` in shell mode, or parse JSON directly in http mode).
+- Limit error log output to the last 40 lines.
 - Summarize each check into <= 120 tokens before writing to memory.
 - Notifications must be <= 400 characters; put details in `heartbeat/ha-latest.md`.
 - Never include raw JSON bodies in memory writes — store flat key/value lines.

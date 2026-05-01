@@ -11,13 +11,13 @@ This extension comes in two variants. **Install one, not both** — the installe
 | | Local | Remote |
 |---|---|---|
 | **For** | HA on your LAN (`http://`, `192.168.*`, `*.local`) | HA via public HTTPS (Nabu Casa, DuckDNS) |
-| **How it works** | Agent uses native `shell` + `curl` | Agent uses `ha-tool` WASM component |
+| **How it works** | Agent uses built-in `http` or `shell` tool | Agent uses `ha-tool` WASM component |
 | **Install command** | `./local/scripts/install.sh` | `./scripts/install.sh` |
 | **Requires Rust** | No | Yes |
 | **Install time** | < 1 second | 1–2 minutes (WASM compile) |
-| **Extras** | — | Structured responses, input validation, compact mode |
+| **Extras** | Dual-mode (http/shell), works in routines | Structured responses, input validation, compact mode |
 
-> **Most users should install Local.** It works with any HA instance, requires no build tools, and has no sandbox restrictions.
+> **Most users should install Local.** It works with any HA instance, requires no build tools, and is more reliable in routines and server mode.
 
 ---
 
@@ -41,7 +41,9 @@ cd ironclaw-home-assistant-skill
 ./local/scripts/install.sh
 ```
 
-The installer asks for your HA URL and access token, then copies the skill, heartbeat, and routine files to `~/.ironclaw/`.
+The installer asks for your HA URL and access token, copies files to `~/.ironclaw/`, and guides you through setting `HTTP_ALLOW_LOCALHOST=true` for the most reliable operation.
+
+> **Important:** After installation, set `HTTP_ALLOW_LOCALHOST=true` in your IronClaw environment and restart. This enables the built-in `http` tool to reach your local HA — it works in all contexts (CLI, server, routines, jobs) without depending on the `shell` tool.
 
 ## Installation — Remote (public HTTPS only)
 
@@ -175,7 +177,7 @@ If something is wrong, the agent sends you a notification with proposed fixes. *
 
 ### Cron Routines (`routines.md`)
 
-Pre-written prompts you can paste into `ironclaw chat` to create scheduled monitoring jobs:
+Pre-written prompts you can paste into `ironclaw chat` to create scheduled monitoring jobs. All routines support dual-mode (http/shell) and will use whichever tool is available:
 
 - **Hourly health check** — status, config, notifications
 - **Daily error digest** — ERROR/WARNING lines from the last 24 hours
@@ -189,7 +191,7 @@ Open `~/.ironclaw/routines.md`, copy any routine prompt, paste it into a chat se
 
 ## Local vs Remote — When to Use Which
 
-**Local** (recommended): Use `./local/scripts/install.sh` for any HA on your LAN. The agent calls the HA REST API directly via `shell` + `curl`. No build tools, no sandbox restrictions, works with `http://`.
+**Local** (recommended): Use `./local/scripts/install.sh` for any HA on your LAN. The agent uses IronClaw's built-in `http` tool (preferred) or `shell` + `curl` (fallback) to call the HA REST API. No build tools, no sandbox restrictions, works with `http://`. Set `HTTP_ALLOW_LOCALHOST=true` for the most reliable operation.
 
 **Remote**: Use `./scripts/install.sh` only when your HA is accessible via public HTTPS (Nabu Casa Cloud or DuckDNS + Let's Encrypt). Provides structured JSON responses, input validation, and compact entity output via the `ha-tool` WASM component. To set up DuckDNS, run `bash scripts/setup-duckdns.sh`.
 
@@ -199,6 +201,8 @@ Open `~/.ironclaw/routines.md`, copy any routine prompt, paste it into a chat se
 
 | Problem | Solution |
 |---|---|
+| `Tool 'shell' failed: Tool shell not found` | Set `HTTP_ALLOW_LOCALHOST=true` in your IronClaw environment and restart. The agent will use the built-in `http` tool instead. |
+| `only https URLs are allowed` or `private or local IPs are not allowed` | Set `HTTP_ALLOW_LOCALHOST=true` in your IronClaw environment and restart. |
 | `ironclaw: command not found` | Make sure IronClaw is installed and in your `$PATH` |
 | `cargo: command not found` (remote only) | Run `source "$HOME/.cargo/env"` or open a new terminal |
 | Build fails with "can't find crate `std`" (remote only) | Run `rustup target add wasm32-wasip2` |
@@ -211,9 +215,10 @@ Open `~/.ironclaw/routines.md`, copy any routine prompt, paste it into a chat se
 
 ## How It Works (Technical)
 
-- `ha-tool` is a Rust WASM component that runs inside IronClaw's sandbox
-- It communicates with Home Assistant via the [REST API](https://developers.home-assistant.io/docs/api/rest/)
-- Your HA token is stored in IronClaw's secret store and injected as `Authorization: Bearer` — it never enters the WASM sandbox
+- **Local extension** uses IronClaw's built-in `http` tool (preferred, always available with `HTTP_ALLOW_LOCALHOST=true`) or `shell` + `curl` (fallback). The agent tries `http` first and falls back to `shell` automatically.
+- **Remote extension** uses `ha-tool`, a Rust WASM component that runs inside IronClaw's sandbox
+- Both communicate with Home Assistant via the [REST API](https://developers.home-assistant.io/docs/api/rest/)
+- Your HA token is stored locally in `~/.ironclaw/.ha_token`
 - The `SKILL.md` file helps IronClaw's AI know when to activate this tool based on your conversation
 - All URL validation happens both in the install script (for templates) and in the Rust code (on every API call)
 
@@ -221,12 +226,12 @@ Open `~/.ironclaw/routines.md`, copy any routine prompt, paste it into a chat se
 
 ```
 ironclaw-home-assistant-skill/
-├── local/                     # Local extension (shell+curl, no WASM)
+├── local/                     # Local extension (http tool + shell fallback)
 │   ├── scripts/install.sh     #   Local installer (run this for local HA)
-│   ├── skills/SKILL.md        #   Skill file (curl-only)
+│   ├── skills/SKILL.md        #   Skill file (dual-mode: http/shell)
 │   └── heartbeat/
-│       ├── HEARTBEAT.md       #   Heartbeat template (curl-only)
-│       └── routines.md        #   Cron routine prompts (curl-only)
+│       ├── HEARTBEAT.md       #   Heartbeat template (dual-mode)
+│       └── routines.md        #   Cron routine prompts (dual-mode)
 ├── scripts/
 │   ├── install.sh             # Remote installer (run this for public HTTPS HA)
 │   ├── setup-duckdns.sh       # DuckDNS + Let's Encrypt HTTPS setup
