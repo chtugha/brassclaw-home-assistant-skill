@@ -13,11 +13,20 @@ must be set explicitly in server mode via `ALLOW_LOCAL_TOOLS=true`).
 If the `shell` tool is unavailable, these routines will fail — switch to
 the HTTPS remote extension or enable local tools first.
 
+**Every routine below includes a shell pre-check as its first step.** If
+`shell: echo ok` fails, the routine aborts and notifies you rather than
+throwing a cryptic tool error.
+
 ## 1. Hourly health check
 
 ```
 Create a cron routine named "ha-hourly-health" that runs at minute 5 of every
 hour. The job should:
+0. Run: shell: echo ok
+   If this fails with a tool-not-found error, abort immediately and send a
+   notification: "ha-hourly-health: shell tool unavailable. Set
+   ALLOW_LOCAL_TOOLS=true in IronClaw config and restart, then re-create
+   this routine." Do not attempt any further steps.
 1. Run: curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/
 2. Run: curl -s -X POST -H "Authorization: Bearer <TOKEN>" -H "Content-Type: application/json" -d '{}' {{HA_URL}}/api/config/core/check_config
 3. Run: curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/states | jq '[.[] | select(.entity_id | startswith("persistent_notification."))]'
@@ -31,6 +40,11 @@ Never call any write endpoints without explicit user confirmation.
 ```
 Create a cron routine named "ha-daily-errors" that runs every day at 08:00.
 The job should:
+0. Run: shell: echo ok
+   If this fails with a tool-not-found error, abort immediately and send a
+   notification: "ha-daily-errors: shell tool unavailable. Set
+   ALLOW_LOCAL_TOOLS=true in IronClaw config and restart, then re-create
+   this routine." Do not attempt any further steps.
 1. Run: curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/error_log
 2. Extract only ERROR and WARNING lines from the last 24 hours
 3. Write the digest to memory at ha/daily-errors/<date>.md
@@ -42,6 +56,11 @@ The job should:
 ```
 Create a cron routine named "ha-weekly-updates" that runs every Monday at 09:00.
 The job should:
+0. Run: shell: echo ok
+   If this fails with a tool-not-found error, abort immediately and send a
+   notification: "ha-weekly-updates: shell tool unavailable. Set
+   ALLOW_LOCAL_TOOLS=true in IronClaw config and restart, then re-create
+   this routine." Do not attempt any further steps.
 1. Run: curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/states | jq '[.[] | select(.entity_id | startswith("update.")) | select(.state == "on")]'
 2. For each available update, include attributes.title and
    attributes.latest_version in the report
@@ -54,6 +73,11 @@ The job should:
 ```
 Create a cron routine named "ha-automation-health" that runs every 6 hours.
 The job should:
+0. Run: shell: echo ok
+   If this fails with a tool-not-found error, abort immediately and send a
+   notification: "ha-automation-health: shell tool unavailable. Set
+   ALLOW_LOCAL_TOOLS=true in IronClaw config and restart, then re-create
+   this routine." Do not attempt any further steps.
 1. Run: curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/states | jq '[.[] | select(.entity_id | startswith("automation."))]'
 2. Flag automations with state="unavailable" or last_triggered older than 30 days
 3. Write findings to memory at ha/automation-health/<date>.md
@@ -65,6 +89,11 @@ The job should:
 ```
 Create a cron routine named "ha-battery-check" that runs every day at 18:00.
 The job should:
+0. Run: shell: echo ok
+   If this fails with a tool-not-found error, abort immediately and send a
+   notification: "ha-battery-check: shell tool unavailable. Set
+   ALLOW_LOCAL_TOOLS=true in IronClaw config and restart, then re-create
+   this routine." Do not attempt any further steps.
 1. Run: curl -s -H "Authorization: Bearer <TOKEN>" {{HA_URL}}/api/states | jq '[.[] | select(.attributes.device_class == "battery") | select((.state | tonumber) < 20)]'
 2. Notify the user with a list of devices needing batteries
 ```

@@ -1,6 +1,6 @@
 ---
 name: home-assistant
-version: 0.5.1
+version: 0.5.2
 description: Control Home Assistant — lights, climate, switches, automations, scripts, scenes, MQTT, Modbus, and system management via ha-tool
 activation:
   keywords:
@@ -82,7 +82,7 @@ Every call requires `ha_url` — ask once, reuse. `ha_url` must be HTTPS with a 
 
 ## Modbus Workflows
 
-> **Note**: ha-tool provides `modbus_write` only. Register scanning requires direct TCP access to the Modbus device — use the local extension (`local/skills/SKILL.md`) or SSH into the HA host manually. The workflows below use only ha-tool actions.
+> **Note**: ha-tool provides `modbus_write` only. Register scanning requires direct TCP access to the Modbus device — use the local extension (install from the `local/` directory in this repo) or SSH into the HA host manually. The workflows below use only ha-tool actions.
 
 ### 1. Import registers from a PDF / datasheet
 
