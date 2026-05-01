@@ -190,7 +190,7 @@ HA Token:
 
 Paste your token and press Enter. **The token is not echoed** — the cursor will not move. That is normal. Press Enter once and wait.
 
-The token is saved to `~/.ironclaw/.ha_token` with restricted permissions (`chmod 600`). It is never stored in plaintext anywhere else.
+The token is saved to `~/.ironclaw/.ha_token`, `~/.ironclaw/HEARTBEAT.md`, and `~/.ironclaw/routines.md`, all with restricted permissions (`chmod 600`). HEARTBEAT.md and routines.md need the token so the agent can make API calls during scheduled heartbeat ticks and cron routines, where it cannot read files interactively.
 
 ---
 
@@ -271,7 +271,7 @@ Configuration saved:
   Routines:   ~/.ironclaw/routines.md
 ```
 
-All four lines should show file paths (not "not installed"). If any say "not installed", re-run the installer.
+All three lines (Skill, Heartbeat, Routines) should show file paths — not "not installed". If any do, re-run the installer.
 
 **You are done with the local installer. Skip to [Step 3](#step-3--verify-it-works).**
 
@@ -694,8 +694,8 @@ After the script finishes, you still need to:
 | File | Location | Purpose |
 |---|---|---|
 | `SKILL.md` | `~/.ironclaw/skills/home-assistant[-local]/SKILL.md` | Tells IronClaw's AI when and how to use the extension |
-| `HEARTBEAT.md` | `~/.ironclaw/HEARTBEAT.md` | Read-only health check instructions for heartbeat ticks |
-| `routines.md` | `~/.ironclaw/routines.md` | Ready-to-paste prompts for creating cron monitoring jobs |
+| `HEARTBEAT.md` | `~/.ironclaw/HEARTBEAT.md` | Read-only health check instructions for heartbeat ticks; contains injected URL + token (`chmod 600`, local only) |
+| `routines.md` | `~/.ironclaw/routines.md` | Ready-to-paste prompts for cron monitoring jobs; contains injected URL + token (`chmod 600`, local only) |
 | `.ha_url` | `~/.ironclaw/.ha_url` | Saved HA URL (reused across reinstalls) |
 | `.ha_token` | `~/.ironclaw/.ha_token` | Saved HA token (local extension only, `chmod 600`) |
 
