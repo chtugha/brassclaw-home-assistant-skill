@@ -1,6 +1,6 @@
 ---
 name: home-assistant
-version: 0.5.0
+version: 0.5.1
 description: Control Home Assistant — lights, climate, switches, automations, scripts, scenes, MQTT, Modbus, and system management via ha-tool
 activation:
   keywords:
@@ -61,7 +61,7 @@ Every call requires `ha_url` — ask once, reuse. `ha_url` must be HTTPS with a 
 
 **MQTT**: `mqtt_publish` (topic + payload, optional qos/retain)
 
-**Modbus**: `modbus_write` (unit + address + value + write_type coil|holding, optional hub). See **Modbus Workflows** below for register scanning, PDF import, and config management.
+**Modbus**: `modbus_write` (unit + address + value + write_type coil|holding, optional hub). See **Modbus Workflows** below for PDF import and error diagnosis.
 
 **Templates**: `render_template` (Jinja2 template, optional variables/max_chars; default 8 KiB, max 16 KiB)
 
@@ -82,38 +82,9 @@ Every call requires `ha_url` — ask once, reuse. `ha_url` must be HTTPS with a 
 
 ## Modbus Workflows
 
-### 1. Scan a Modbus device for registers
+> **Note**: ha-tool provides `modbus_write` only. Register scanning requires direct TCP access to the Modbus device — use the local extension (`local/skills/SKILL.md`) or SSH into the HA host manually. The workflows below use only ha-tool actions.
 
-Use SSH to probe registers on the HA host. Prefer `modpoll` (install: `pip install modpoll`). Fall back to Python `pymodbus` one-liners.
-
-**Holding registers** (function code 3 — the most common):
-```
-modpoll -m tcp -a <unit_id> -r <start> -c <count> -t 4 <host>:<port>
-```
-
-**Input registers** (function code 4):
-```
-modpoll -m tcp -a <unit_id> -r <start> -c <count> -t 3 <host>:<port>
-```
-
-**Coils** (function code 1, returns 0/1):
-```
-modpoll -m tcp -a <unit_id> -r <start> -c <count> -t 0 <host>:<port>
-```
-
-**Discrete inputs** (function code 2, read-only 0/1):
-```
-modpoll -m tcp -a <unit_id> -r <start> -c <count> -t 1 <host>:<port>
-```
-
-Pymodbus fallback (no install needed if HA uses pymodbus):
-```
-python3 -c "from pymodbus.client import ModbusTcpClient; c=ModbusTcpClient('<host>',<port>); c.connect(); r=c.read_holding_registers(<start>,<count>,slave=<unit_id>); print(r.registers if not r.isError() else r); c.close()"
-```
-
-Scan strategy: start with holding registers 0–99 in chunks of 50, then expand ranges based on responses. Registers that return errors are unimplemented — skip them.
-
-### 2. Import registers from a PDF / datasheet
+### 1. Import registers from a PDF / datasheet
 
 When the user provides a device PDF or register table:
 
@@ -124,10 +95,9 @@ When the user provides a device PDF or register table:
    - `data_type`: int16, uint16, int32, uint32, float32, float64, string
    - `scale`/`offset` for unit conversion (e.g. raw value × 0.1 = °C)
    - `scan_interval` for poll frequency
-3. Generate the YAML stanzas
-4. Read existing config: `ssh user@HA cat /config/configuration.yaml` (or the modbus include file)
-5. Merge new entries under the correct hub — never duplicate addresses
-6. Write back via SSH → `check_config` → `reload_core_config`
+3. Generate the YAML stanzas and show them to the user for review
+4. User applies them to `/config/configuration.yaml` manually or via HA file editor
+5. `check_config` → `reload_core_config`
 
 Example generated entry:
 ```yaml
@@ -147,12 +117,12 @@ modbus:
         scan_interval: 30
 ```
 
-### 3. Diagnose & fix Modbus errors
+### 2. Diagnose & fix Modbus errors
 
 1. `get_error_log tail_lines=100` — look for `Modbus` / `pymodbus` errors
 2. `get_config_entries domain=modbus` — get the hub's `entry_id`
 3. Common fixes:
-   - **Timeout / connection refused**: check host:port reachability via SSH (`ssh user@HA nc -z <host> <port>`)
+   - **Timeout / connection refused**: verify the device host:port is reachable from the HA host (user must check manually or use local extension)
    - **Illegal data address**: register doesn't exist on device — remove from config or fix address
    - **Slave failure**: device overloaded — increase `scan_interval` or reduce register count
    - **CRC error** (RTU): wiring/baud rate issue — check serial config
