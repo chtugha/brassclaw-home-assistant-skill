@@ -1,3 +1,4 @@
+<!-- VARIANT: local -->
 <!-- INSTALL_PREAMBLE: This file is a template. {{HA_URL}} and {{HA_TOKEN}}
      placeholders are replaced automatically by local/scripts/install.sh
      during installation. If you are editing this file manually, replace

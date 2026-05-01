@@ -265,9 +265,17 @@ HEARTBEAT_DEST="$IRONCLAW_DIR/HEARTBEAT.md"
 HEARTBEAT_STATUS="not_found"
 if [[ -f "$HEARTBEAT_SRC" ]]; then
     if [[ -f "$HEARTBEAT_DEST" ]]; then
-        HEARTBEAT_STATUS="skipped"
-        warn "HEARTBEAT.md already exists — leaving unchanged."
-        echo "    (Merge entries from $HEARTBEAT_SRC manually if desired.)"
+        if grep -q '<!-- VARIANT: remote -->' "$HEARTBEAT_DEST" 2>/dev/null; then
+            warn "HEARTBEAT.md is from the remote extension — replacing with local variant."
+            cp "$HEARTBEAT_SRC" "$HEARTBEAT_DEST"
+            replace_ha_url_placeholder "$HEARTBEAT_DEST" "$HA_URL"
+            HEARTBEAT_STATUS="configured"
+            info "Replaced and configured: $HEARTBEAT_DEST"
+        else
+            HEARTBEAT_STATUS="skipped"
+            warn "HEARTBEAT.md already exists — leaving unchanged."
+            echo "    (Merge entries from $HEARTBEAT_SRC manually if desired.)"
+        fi
     else
         cp "$HEARTBEAT_SRC" "$HEARTBEAT_DEST"
         replace_ha_url_placeholder "$HEARTBEAT_DEST" "$HA_URL"
@@ -283,15 +291,25 @@ ROUTINES_DEST="$IRONCLAW_DIR/routines.md"
 ROUTINES_STATUS="not_found"
 if [[ -f "$ROUTINES_SRC" ]]; then
     if [[ -f "$ROUTINES_DEST" ]]; then
-        ROUTINES_STATUS="skipped"
-        warn "routines.md already exists — leaving unchanged."
-        echo "    (Merge entries from $ROUTINES_SRC manually if desired.)"
+        if grep -q '<!-- VARIANT: remote -->' "$ROUTINES_DEST" 2>/dev/null; then
+            warn "routines.md is from the remote extension — replacing with local variant."
+            cp "$ROUTINES_SRC" "$ROUTINES_DEST"
+            replace_ha_url_placeholder "$ROUTINES_DEST" "$HA_URL"
+            ROUTINES_STATUS="configured"
+            info "Replaced and configured: $ROUTINES_DEST"
+        else
+            ROUTINES_STATUS="skipped"
+            warn "routines.md already exists — leaving unchanged."
+            echo "    (Merge entries from $ROUTINES_SRC manually if desired.)"
+        fi
     else
         cp "$ROUTINES_SRC" "$ROUTINES_DEST"
         replace_ha_url_placeholder "$ROUTINES_DEST" "$HA_URL"
         ROUTINES_STATUS="configured"
         info "Installed and configured: $ROUTINES_DEST"
     fi
+else
+    warn "No routines.md found — skipping."
 fi
 
 # --- Step 3: Store HA token ---
@@ -394,7 +412,7 @@ echo "    HA Token:   $TOKEN_FILE"
 case "$SKILL_STATUS" in
     configured) echo "    Skill:      $SKILL_DEST" ;;
     skipped)    echo "    Skill:      $SKILL_DEST (skipped — already up to date)" ;;
-    *)          echo "    Skill:      not installed (source not found)" ;;
+    *)          echo "    Skill:      not installed (source template not found)" ;;
 esac
 case "$HEARTBEAT_STATUS" in
     configured) echo "    Heartbeat:  $HEARTBEAT_DEST" ;;

@@ -180,6 +180,27 @@ step 2 "Configuring Home Assistant URL..."
 prompt_ha_url
 info "URL saved: $HA_URL"
 
+if validate_ha_url "$HA_URL" && [[ "$HA_URL" =~ ^http:// ]]; then
+    echo ""
+    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "  ${YELLOW}  Local HA detected — consider using the local installer${NC}"
+    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo "  Your URL (${HA_URL}) is a local address. This installer"
+    echo "  sets up ha-tool, which works best with HTTPS + public hostname."
+    echo ""
+    echo "  For local HA, the local installer is recommended:"
+    echo "    ${BOLD}./local/scripts/install.sh${NC}"
+    echo ""
+    printf "  Continue with the remote installer anyway? [y/N]: "
+    read -r cont
+    if [[ ! "$cont" =~ ^[Yy]$ ]]; then
+        echo ""
+        info "Installation cancelled. Run ${BOLD}./local/scripts/install.sh${NC} instead."
+        exit 0
+    fi
+fi
+
 # --- Step 3: Install ha-tool ---
 
 step 3 "Installing ha-tool from source..."
@@ -236,9 +257,17 @@ HEARTBEAT_SRC="$ROOT_DIR/heartbeat/HEARTBEAT.md"
 HEARTBEAT_DEST="$IRONCLAW_DIR/HEARTBEAT.md"
 if [[ -f "$HEARTBEAT_SRC" ]]; then
     if [[ -f "$HEARTBEAT_DEST" ]]; then
-        HEARTBEAT_STATUS="skipped"
-        warn "HEARTBEAT.md already exists — leaving unchanged."
-        echo "    (Merge entries from $HEARTBEAT_SRC manually if desired.)"
+        if grep -q '<!-- VARIANT: local -->' "$HEARTBEAT_DEST" 2>/dev/null; then
+            warn "HEARTBEAT.md is from the local extension — replacing with remote variant."
+            cp "$HEARTBEAT_SRC" "$HEARTBEAT_DEST"
+            replace_ha_url_placeholder "$HEARTBEAT_DEST" "$HA_URL"
+            HEARTBEAT_STATUS="configured"
+            info "Replaced and configured: $HEARTBEAT_DEST"
+        else
+            HEARTBEAT_STATUS="skipped"
+            warn "HEARTBEAT.md already exists — leaving unchanged."
+            echo "    (Merge entries from $HEARTBEAT_SRC manually if desired.)"
+        fi
     else
         cp "$HEARTBEAT_SRC" "$HEARTBEAT_DEST"
         replace_ha_url_placeholder "$HEARTBEAT_DEST" "$HA_URL"
@@ -253,15 +282,25 @@ ROUTINES_SRC="$ROOT_DIR/heartbeat/routines.md"
 ROUTINES_DEST="$IRONCLAW_DIR/routines.md"
 if [[ -f "$ROUTINES_SRC" ]]; then
     if [[ -f "$ROUTINES_DEST" ]]; then
-        ROUTINES_STATUS="skipped"
-        warn "routines.md already exists — leaving unchanged."
-        echo "    (Merge entries from $ROUTINES_SRC manually if desired.)"
+        if grep -q '<!-- VARIANT: local -->' "$ROUTINES_DEST" 2>/dev/null; then
+            warn "routines.md is from the local extension — replacing with remote variant."
+            cp "$ROUTINES_SRC" "$ROUTINES_DEST"
+            replace_ha_url_placeholder "$ROUTINES_DEST" "$HA_URL"
+            ROUTINES_STATUS="configured"
+            info "Replaced and configured: $ROUTINES_DEST"
+        else
+            ROUTINES_STATUS="skipped"
+            warn "routines.md already exists — leaving unchanged."
+            echo "    (Merge entries from $ROUTINES_SRC manually if desired.)"
+        fi
     else
         cp "$ROUTINES_SRC" "$ROUTINES_DEST"
         replace_ha_url_placeholder "$ROUTINES_DEST" "$HA_URL"
         ROUTINES_STATUS="configured"
         info "Installed and configured: $ROUTINES_DEST"
     fi
+else
+    warn "No routines.md found — skipping."
 fi
 
 # --- Step 5: Configure HA token ---
@@ -290,29 +329,11 @@ echo "  ${BOLD}Quick test:${NC}"
 echo "    ironclaw chat"
 echo "    > Is my Home Assistant at ${HA_URL} online?"
 echo ""
-if [[ "$HA_URL" =~ ^http:// ]] || [[ "$HA_URL" =~ \.(local|lan|home|internal)(:|/|$) ]] || [[ "$HA_URL" =~ ^https?://(localhost|127\.|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.) ]]; then
-    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo "  ${YELLOW}  Local HA detected — wrong installer${NC}"
-    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo "  Your URL (${HA_URL}) is a local address. This installer"
-    echo "  sets up ha-tool, which requires HTTPS + public hostname."
-    echo ""
-    echo "  For local HA, use the local installer instead:"
-    echo "    ${BOLD}./local/scripts/install.sh${NC}"
-    echo "  Note: the local extension requires IronClaw's built-in 'shell'"
-    echo "  tool. In CLI mode (ironclaw chat) it is available by default."
-    echo "  In server mode, set ${BOLD}ALLOW_LOCAL_TOOLS=true${NC} first."
-    echo ""
-    echo "  Or set up DuckDNS + Let's Encrypt to get a public HTTPS URL:"
-    echo "    ${BOLD}bash scripts/setup-duckdns.sh${NC}"
-    echo ""
-fi
 echo "  ${BOLD}Configuration saved:${NC}"
 echo "    HA URL:     $HA_URL_FILE"
 case "$SKILL_STATUS" in
     configured) echo "    Skill:      $SKILL_DEST" ;;
-    skipped)    echo "    Skill:      $SKILL_DEST (skipped — already exists)" ;;
+    skipped)    echo "    Skill:      $SKILL_DEST (skipped — already up to date)" ;;
     *)          echo "    Skill:      not installed (source template not found)" ;;
 esac
 case "$HEARTBEAT_STATUS" in

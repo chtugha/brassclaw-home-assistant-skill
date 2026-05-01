@@ -1,5 +1,6 @@
 # Home Assistant Cron Routines
 
+<!-- VARIANT: remote -->
 <!-- INSTALL_PREAMBLE: This file is a template. {{HA_URL}} placeholders are
      replaced automatically by scripts/install.sh during installation.
      If you are editing this file manually, replace every {{HA_URL}} with
