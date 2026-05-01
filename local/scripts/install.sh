@@ -159,7 +159,7 @@ if [[ "${HTTP_ALLOW_LOCALHOST:-}" == "true" ]] || [[ "${HTTP_ALLOW_LOCALHOST:-}"
 fi
 
 SHELL_TOOL_AVAILABLE=false
-if ironclaw tool list 2>/dev/null | grep -q '\bshell\b'; then
+if ironclaw tool list 2>/dev/null | grep -wq 'shell'; then
     SHELL_TOOL_AVAILABLE=true
 fi
 

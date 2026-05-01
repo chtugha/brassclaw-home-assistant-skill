@@ -24,7 +24,7 @@ supervisor_api_full() {
     local method="$1" path="$2" ha_url="$3" token="$4"
     shift 4
     local url="${ha_url}/api/hassio${path}"
-    local args=(-s -S \
+    local args=(-s \
         -H "Authorization: Bearer ${token}" \
         -H "Content-Type: application/json" \
         -X "$method")
