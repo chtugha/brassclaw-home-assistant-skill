@@ -8,6 +8,10 @@ prompt below, paste it into `ironclaw chat`, and the agent will set up
 the cron routine for you.
 
 All routines use the native `shell` tool with `curl` to call the HA REST API.
+The `shell` tool requires `allow_local_tools = true` (default in CLI mode,
+must be set explicitly in server mode via `ALLOW_LOCAL_TOOLS=true`).
+If the `shell` tool is unavailable, these routines will fail — switch to
+the HTTPS remote extension or enable local tools first.
 
 ## 1. Hourly health check
 

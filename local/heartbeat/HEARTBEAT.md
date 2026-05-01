@@ -7,6 +7,15 @@ IronClaw reads this file on every heartbeat tick (default: every 30 minutes).
 It runs read-only health checks, detects problems, and proposes fixes.
 No changes are made without your explicit confirmation.
 
+## Prerequisites
+
+This heartbeat requires IronClaw's built-in `shell` tool. It is available
+by default in CLI mode (`ironclaw chat`) but NOT in server/relay mode
+unless `ALLOW_LOCAL_TOOLS=true` is set. If the `shell` tool is unavailable,
+skip all checks and notify the user that the local HA heartbeat cannot run
+without the `shell` tool — suggest setting `ALLOW_LOCAL_TOOLS=true` or
+switching to the HTTPS remote extension.
+
 ## API Call Method
 
 All checks use the native `shell` tool with `curl`. At tick start, read the

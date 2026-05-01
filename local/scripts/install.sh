@@ -136,12 +136,47 @@ if ! command -v ironclaw &>/dev/null; then
     exit 1
 fi
 
+SHELL_TOOL_AVAILABLE=false
+if ironclaw tool list 2>/dev/null | grep -q '\bshell\b'; then
+    SHELL_TOOL_AVAILABLE=true
+fi
+
 echo ""
 echo "  ${BOLD}IronClaw Home Assistant Extension — Local Installer${NC}"
 echo "  ────────────────────────────────────────────────────"
 echo ""
 echo "  This installer sets up the local HA extension (shell+curl)."
 echo "  No WASM tool or build step required."
+
+if [[ "$SHELL_TOOL_AVAILABLE" != "true" ]]; then
+    echo ""
+    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo "  ${YELLOW}  WARNING: Built-in 'shell' tool not found${NC}"
+    echo "  ${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo "  The local extension requires IronClaw's built-in 'shell' tool,"
+    echo "  which is only available when ${BOLD}allow_local_tools = true${NC}."
+    echo ""
+    echo "  This is the default for ${BOLD}ironclaw chat${NC} (CLI mode), but"
+    echo "  server/relay deployments disable it by default."
+    echo ""
+    echo "  To fix:"
+    echo "    • CLI mode: the shell tool should be available automatically."
+    echo "      Run ${BOLD}ironclaw tool list${NC} to verify."
+    echo "    • Server mode: set ${BOLD}ALLOW_LOCAL_TOOLS=true${NC} in your"
+    echo "      environment or IronClaw config, then restart the server."
+    echo ""
+    echo "  Alternatively, expose HA via HTTPS (Nabu Casa or DuckDNS)"
+    echo "  and use the remote installer instead: ${BOLD}./scripts/install.sh${NC}"
+    echo ""
+    printf "  Continue anyway? [y/N]: "
+    read -r cont
+    if [[ ! "$cont" =~ ^[Yy]$ ]]; then
+        echo ""
+        info "Installation cancelled."
+        exit 0
+    fi
+fi
 
 # --- Step 1: Prompt for Home Assistant URL ---
 
@@ -281,6 +316,15 @@ echo "    > Is my Home Assistant at ${HA_URL} online?"
 echo ""
 echo "  The agent will use shell+curl to call your HA REST API directly."
 echo "  No WASM sandbox restrictions — works with any local HA instance."
+echo ""
+echo "  ${BOLD}Requirement:${NC} IronClaw's built-in 'shell' tool must be available."
+echo "  In CLI mode (ironclaw chat) it is enabled by default."
+echo "  In server mode, set ${BOLD}ALLOW_LOCAL_TOOLS=true${NC} in your config."
+if [[ "$SHELL_TOOL_AVAILABLE" != "true" ]]; then
+    echo ""
+    echo "  ${YELLOW}⚠  The 'shell' tool was NOT detected during install.${NC}"
+    echo "  ${YELLOW}   See the warning above for how to enable it.${NC}"
+fi
 echo ""
 echo "  ${BOLD}Configuration saved:${NC}"
 echo "    HA URL:     $HA_URL_FILE"

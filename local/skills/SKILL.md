@@ -47,6 +47,18 @@ activation:
 
 # Home Assistant via shell+curl
 
+## Prerequisites
+
+This extension requires IronClaw's built-in `shell` tool (a dev-domain tool). It is available by default in CLI mode (`ironclaw chat`) but NOT in server/relay mode unless `ALLOW_LOCAL_TOOLS=true` is set.
+
+If the `shell` tool is not available (you get "Tool shell not found"), tell the user:
+1. Set `ALLOW_LOCAL_TOOLS=true` in their IronClaw server config and restart, OR
+2. Switch to the HTTPS remote extension: expose HA via Nabu Casa or DuckDNS, then run `./scripts/install.sh`
+
+Do NOT attempt shell calls if the tool is unavailable — report the prerequisite issue instead.
+
+## Setup
+
 All HA API calls use the native `shell` tool with `curl`. At session start, read the stored token and URL:
 ```
 shell: cat ~/.ironclaw/.ha_token
