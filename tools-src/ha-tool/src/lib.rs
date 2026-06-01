@@ -1,4 +1,5 @@
 mod api;
+mod helpers;
 mod types;
 
 use std::sync::OnceLock;
@@ -70,78 +71,120 @@ fn execute_inner(params: &str) -> Result<String, String> {
 
     match action {
         HaAction::GetStatus { ha_url } => api::get_status(&ha_url),
-        HaAction::GetStates { ha_url, domain_filter, max_items, compact } => {
+        HaAction::GetStates {
+            ha_url,
+            domain_filter,
+            max_items,
+            compact,
+        } => {
             let domains = domain_filter.as_ref().map(|f| f.as_vec());
-            api::get_states(&ha_url, domains.as_deref(), max_items, compact.unwrap_or(false))
+            api::get_states(
+                &ha_url,
+                domains.as_deref(),
+                max_items,
+                compact.unwrap_or(false),
+            )
         }
         HaAction::GetState { ha_url, entity_id } => api::get_state(&ha_url, &entity_id),
-        HaAction::SetState { ha_url, entity_id, state, attributes } => {
-            api::set_state(&ha_url, &entity_id, &state, attributes.as_ref())
-        }
+        HaAction::SetState {
+            ha_url,
+            entity_id,
+            state,
+            attributes,
+        } => api::set_state(&ha_url, &entity_id, &state, attributes.as_ref()),
         HaAction::DeleteState { ha_url, entity_id } => api::delete_state(&ha_url, &entity_id),
-        HaAction::CallService { ha_url, domain, service, data } => {
-            api::call_service(&ha_url, &domain, &service, data.as_ref())
-        }
+        HaAction::CallService {
+            ha_url,
+            domain,
+            service,
+            data,
+        } => api::call_service(&ha_url, &domain, &service, data.as_ref()),
         HaAction::GetServices { ha_url } => api::get_services(&ha_url),
-        HaAction::FireEvent { ha_url, event_type, event_data } => {
-            api::fire_event(&ha_url, &event_type, event_data.as_ref())
-        }
-        HaAction::RenderTemplate { ha_url, template, variables, max_chars } => {
-            api::render_template(&ha_url, &template, variables.as_ref(), max_chars)
-        }
-        HaAction::GetHistory { ha_url, entity_id, hours_back, start_time, end_time } => {
-            api::get_history(
-                &ha_url,
-                &entity_id,
-                hours_back,
-                start_time.as_deref(),
-                end_time.as_deref(),
-            )
-        }
-        HaAction::GetLogbook { ha_url, entity_id, hours_back, start_time, end_time } => {
-            api::get_logbook(
-                &ha_url,
-                entity_id.as_deref(),
-                hours_back,
-                start_time.as_deref(),
-                end_time.as_deref(),
-            )
-        }
-        HaAction::GetCalendarEvents { ha_url, entity_id, start, end } => {
-            api::get_calendar_events(&ha_url, &entity_id, &start, &end)
-        }
+        HaAction::FireEvent {
+            ha_url,
+            event_type,
+            event_data,
+        } => api::fire_event(&ha_url, &event_type, event_data.as_ref()),
+        HaAction::RenderTemplate {
+            ha_url,
+            template,
+            variables,
+            max_chars,
+        } => api::render_template(&ha_url, &template, variables.as_ref(), max_chars),
+        HaAction::GetHistory {
+            ha_url,
+            entity_id,
+            hours_back,
+            start_time,
+            end_time,
+        } => api::get_history(
+            &ha_url,
+            &entity_id,
+            hours_back,
+            start_time.as_deref(),
+            end_time.as_deref(),
+        ),
+        HaAction::GetLogbook {
+            ha_url,
+            entity_id,
+            hours_back,
+            start_time,
+            end_time,
+        } => api::get_logbook(
+            &ha_url,
+            entity_id.as_deref(),
+            hours_back,
+            start_time.as_deref(),
+            end_time.as_deref(),
+        ),
+        HaAction::GetCalendarEvents {
+            ha_url,
+            entity_id,
+            start,
+            end,
+        } => api::get_calendar_events(&ha_url, &entity_id, &start, &end),
         HaAction::ListAutomations { ha_url } => {
             api::get_states(&ha_url, Some(&["automation"]), None, true)
         }
-        HaAction::ToggleAutomation { ha_url, entity_id, enabled } => {
-            api::toggle_automation(&ha_url, &entity_id, enabled)
-        }
+        HaAction::ToggleAutomation {
+            ha_url,
+            entity_id,
+            enabled,
+        } => api::toggle_automation(&ha_url, &entity_id, enabled),
         HaAction::TriggerAutomation { ha_url, entity_id } => {
             api::trigger_automation(&ha_url, &entity_id)
         }
         HaAction::ListScripts { ha_url } => api::get_states(&ha_url, Some(&["script"]), None, true),
-        HaAction::RunScript { ha_url, entity_id, variables } => {
-            api::run_script(&ha_url, &entity_id, variables.as_ref())
-        }
+        HaAction::RunScript {
+            ha_url,
+            entity_id,
+            variables,
+        } => api::run_script(&ha_url, &entity_id, variables.as_ref()),
         HaAction::ListScenes { ha_url } => api::get_states(&ha_url, Some(&["scene"]), None, true),
-        HaAction::ActivateScene { ha_url, entity_id } => {
-            api::activate_scene(&ha_url, &entity_id)
-        }
-        HaAction::MqttPublish { ha_url, topic, payload, qos, retain } => {
-            api::mqtt_publish(&ha_url, &topic, &payload, qos, retain)
-        }
-        HaAction::ModbusWrite { ha_url, hub, unit, address, value, write_type } => {
-            api::modbus_write(&ha_url, hub.as_deref(), unit, address, &value, &write_type)
-        }
+        HaAction::ActivateScene { ha_url, entity_id } => api::activate_scene(&ha_url, &entity_id),
+        HaAction::MqttPublish {
+            ha_url,
+            topic,
+            payload,
+            qos,
+            retain,
+        } => api::mqtt_publish(&ha_url, &topic, &payload, qos, retain),
+        HaAction::ModbusWrite {
+            ha_url,
+            hub,
+            unit,
+            address,
+            value,
+            write_type,
+        } => api::modbus_write(&ha_url, hub.as_deref(), unit, address, &value, &write_type),
         HaAction::GetConfig { ha_url } => api::get_config(&ha_url),
         HaAction::GetNotifications { ha_url } => api::get_notifications(&ha_url),
-        HaAction::DismissNotification { ha_url, notification_id } => {
-            api::dismiss_notification(&ha_url, &notification_id)
-        }
+        HaAction::DismissNotification {
+            ha_url,
+            notification_id,
+        } => api::dismiss_notification(&ha_url, &notification_id),
         HaAction::CheckConfig { ha_url } => api::check_config(&ha_url),
-        HaAction::GetErrorLog { ha_url, tail_lines } => {
-            api::get_error_log(&ha_url, tail_lines)
-        }
+        HaAction::GetErrorLog { ha_url, tail_lines } => api::get_error_log(&ha_url, tail_lines),
         HaAction::RestartHa { ha_url } => api::restart_ha(&ha_url),
         HaAction::ReloadCoreConfig { ha_url } => api::reload_core_config(&ha_url),
         HaAction::ReloadAutomations { ha_url } => api::reload_automations(&ha_url),
