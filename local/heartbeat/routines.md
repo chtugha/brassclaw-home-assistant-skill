@@ -6,14 +6,14 @@
      long-lived access token. -->
 
 Ready-to-use prompts for creating scheduled monitoring jobs. Copy any
-prompt below, paste it into `ironclaw chat`, and the agent will set up
+prompt below, paste it into `brassclaw chat`, and the agent will set up
 the cron routine for you.
 
 **These routines support two tool modes:**
 - **`http` tool (preferred)** — always available in every context. Requires
-  `HTTP_ALLOW_LOCALHOST=true` in the IronClaw environment.
+  `HTTP_ALLOW_LOCALHOST=true` in the BrassClaw environment.
 - **`shell` tool (fallback)** — requires `allow_local_tools = true` at
-  IronClaw startup.
+  BrassClaw startup.
 
 Each routine below tries the `http` tool first. If it fails with an
 SSRF/HTTPS error, it falls back to `shell+curl`. If neither works, the
@@ -28,7 +28,7 @@ hour. The job should:
    {"method":"GET","url":"{{HA_URL}}/api/","headers":[{"name":"Authorization","value":"Bearer {{HA_TOKEN}}"}]}
    If http returns an SSRF or HTTPS error, try shell: curl -s -H "Authorization: Bearer {{HA_TOKEN}}" {{HA_URL}}/api/
    If neither tool works, send a notification: "ha-hourly-health: no usable
-   tool. Set HTTP_ALLOW_LOCALHOST=true and restart IronClaw." Then abort.
+   tool. Set HTTP_ALLOW_LOCALHOST=true and restart BrassClaw." Then abort.
 1. GET {{HA_URL}}/api/ — confirm HA is reachable
 2. POST {{HA_URL}}/api/config/core/check_config with body {}
 3. GET {{HA_URL}}/api/states — filter for persistent_notification.* entities

@@ -2,7 +2,7 @@
 name = "mcp-server"
 version = "0.1.0"
 edition = "2021"
-description = "Home Assistant Model Context Protocol (MCP) server for IronClaw"
+description = "Home Assistant Model Context Protocol (MCP) server for BrassClaw"
 publish = false
 
 [dependencies]

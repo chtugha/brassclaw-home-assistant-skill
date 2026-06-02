@@ -7,7 +7,7 @@
      your Home Assistant base URL (e.g. http://192.168.1.100:8123). -->
 
 Ready-to-use prompts for creating scheduled monitoring jobs. Copy any
-prompt below, paste it into `ironclaw chat`, and the agent will set up
+prompt below, paste it into `brassclaw chat`, and the agent will set up
 the cron routine for you.
 
 ## 1. Hourly health check

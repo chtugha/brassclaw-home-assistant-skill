@@ -1,6 +1,6 @@
-# IronClaw Home Assistant Extension
+# BrassClaw Home Assistant Extension
 
-Give your [IronClaw](https://github.com/nearai/ironclaw) AI agent full control over [Home Assistant](https://www.home-assistant.io/) — lights, climate, automations, sensors, MQTT, Modbus, and more — all through natural language.
+Give your [BrassClaw](https://github.com/nearai/brassclaw) AI agent full control over [Home Assistant](https://www.home-assistant.io/) — lights, climate, automations, sensors, MQTT, Modbus, and more — all through natural language.
 
 ---
 
@@ -23,7 +23,7 @@ Give your [IronClaw](https://github.com/nearai/ironclaw) AI agent full control o
 
 ## What This Does
 
-This extension teaches IronClaw how to control Home Assistant. Once installed, you just talk to IronClaw normally:
+This extension teaches BrassClaw how to control Home Assistant. Once installed, you just talk to BrassClaw normally:
 
 ```
 Turn on the living room lights.
@@ -32,7 +32,7 @@ Show me any sensors with problems.
 Check the Home Assistant config for errors.
 ```
 
-IronClaw figures out what API calls to make. You don't need to know the API.
+BrassClaw figures out what API calls to make. You don't need to know the API.
 
 ---
 
@@ -40,15 +40,15 @@ IronClaw figures out what API calls to make. You don't need to know the API.
 
 Work through this checklist **before** running the installer. The installer will fail immediately if these are not in place.
 
-### ✅ 1. IronClaw is installed
+### ✅ 1. BrassClaw is installed
 
 Open a terminal and run:
 ```bash
-ironclaw --version
+brassclaw --version
 ```
 
-If you see a version number, you're good. If you see `command not found`, install IronClaw first:  
-→ https://github.com/nearai/ironclaw
+If you see a version number, you're good. If you see `command not found`, install BrassClaw first:  
+→ https://github.com/nearai/brassclaw
 
 ---
 
@@ -79,7 +79,7 @@ The extension needs a **long-lived access token** to call the HA API. Here is ho
 2. Click your **name** in the bottom-left sidebar (or go to `/profile` directly)
 3. Scroll all the way down to the section called **Long-Lived Access Tokens**
 4. Click the **Create Token** button
-5. Give it a name — for example: `ironclaw`
+5. Give it a name — for example: `brassclaw`
 6. Click **OK**
 7. **Copy the token now** — it will never be shown again
 
@@ -139,11 +139,11 @@ I'm not sure
 Open a terminal and run these two commands one at a time:
 
 ```bash
-git clone https://github.com/chtugha/ironclaw-home-assistant-skill
-cd ironclaw-home-assistant-skill
+git clone https://github.com/chtugha/brassclaw-home-assistant-skill
+cd brassclaw-home-assistant-skill
 ```
 
-You should now be inside the `ironclaw-home-assistant-skill` folder.
+You should now be inside the `brassclaw-home-assistant-skill` folder.
 
 ---
 
@@ -176,7 +176,7 @@ If the URL passes validation, it is saved automatically. If the installer says t
 
 **[2/4] Installing skill, heartbeat, and routine files**
 
-No input needed. The installer copies configuration files to `~/.ironclaw/`.
+No input needed. The installer copies configuration files to `~/.brassclaw/`.
 
 ---
 
@@ -190,7 +190,7 @@ HA Token:
 
 Paste your token and press Enter. **The token is not echoed** — the cursor will not move. That is normal. Press Enter once and wait.
 
-The token is saved to `~/.ironclaw/.ha_token`, `~/.ironclaw/HEARTBEAT.md`, and `~/.ironclaw/routines.md`, all with restricted permissions (`chmod 600`). HEARTBEAT.md and routines.md need the token so the agent can make API calls during scheduled heartbeat ticks and cron routines, where it cannot read files interactively.
+The token is saved to `~/.brassclaw/.ha_token`, `~/.brassclaw/HEARTBEAT.md`, and `~/.brassclaw/routines.md`, all with restricted permissions (`chmod 600`). HEARTBEAT.md and routines.md need the token so the agent can make API calls during scheduled heartbeat ticks and cron routines, where it cannot read files interactively.
 
 ---
 
@@ -204,9 +204,9 @@ If it is **not** set, you will see instructions. Follow them now — this is imp
 
 ### 2A.3 — Set HTTP_ALLOW_LOCALHOST=true (Required)
 
-This environment variable lets IronClaw's built-in `http` tool call local addresses and private IPs. Without it, the agent can only use the `shell` tool — which is not available in scheduled jobs and server mode.
+This environment variable lets BrassClaw's built-in `http` tool call local addresses and private IPs. Without it, the agent can only use the `shell` tool — which is not available in scheduled jobs and server mode.
 
-**Choose the method that matches how you run IronClaw:**
+**Choose the method that matches how you run BrassClaw:**
 
 **Option A — CLI (run manually in your terminal)**
 
@@ -221,7 +221,7 @@ source ~/.zshrc   # or ~/.bashrc — whichever you edited
 
 **Option B — systemd service (runs as a background service)**
 
-Edit your IronClaw service file (`/etc/systemd/system/ironclaw.service` or similar):
+Edit your BrassClaw service file (`/etc/systemd/system/brassclaw.service` or similar):
 ```ini
 [Service]
 Environment=HTTP_ALLOW_LOCALHOST=true
@@ -229,7 +229,7 @@ Environment=HTTP_ALLOW_LOCALHOST=true
 Then reload and restart:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart ironclaw
+sudo systemctl restart brassclaw
 ```
 
 **Option C — Docker**
@@ -247,12 +247,12 @@ environment:
 
 **Option D — .env file**
 
-Add to the `.env` file in your IronClaw working directory:
+Add to the `.env` file in your BrassClaw working directory:
 ```
 HTTP_ALLOW_LOCALHOST=true
 ```
 
-After setting the variable, **restart IronClaw**.
+After setting the variable, **restart BrassClaw**.
 
 ---
 
@@ -264,11 +264,11 @@ At the end, the installer prints a summary:
 ✓ Local HA extension installed!
 
 Configuration saved:
-  HA URL:     ~/.ironclaw/.ha_url
-  HA Token:   ~/.ironclaw/.ha_token
-  Skill:      ~/.ironclaw/skills/home-assistant-local/SKILL.md
-  Heartbeat:  ~/.ironclaw/HEARTBEAT.md
-  Routines:   ~/.ironclaw/routines.md
+  HA URL:     ~/.brassclaw/.ha_url
+  HA Token:   ~/.brassclaw/.ha_token
+  Skill:      ~/.brassclaw/skills/home-assistant-local/SKILL.md
+  Heartbeat:  ~/.brassclaw/HEARTBEAT.md
+  Routines:   ~/.brassclaw/routines.md
 ```
 
 All three lines (Skill, Heartbeat, Routines) should show file paths — not "not installed". If any do, re-run the installer.
@@ -284,8 +284,8 @@ Use this only if your HA is accessible via `https://` with a public hostname (Na
 ### 2B.1 — Get the code
 
 ```bash
-git clone https://github.com/chtugha/ironclaw-home-assistant-skill
-cd ironclaw-home-assistant-skill
+git clone https://github.com/chtugha/brassclaw-home-assistant-skill
+cd brassclaw-home-assistant-skill
 ```
 
 ---
@@ -327,7 +327,7 @@ https://XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.ui.nabu.casa
 
 **[3/5] Installing ha-tool from source**
 
-No input needed. IronClaw compiles the `ha-tool` WASM extension from source. This takes **1–5 minutes** the first time. Subsequent installs are faster due to build caching.
+No input needed. BrassClaw compiles the `ha-tool` WASM extension from source. This takes **1–5 minutes** the first time. Subsequent installs are faster due to build caching.
 
 You should see Rust compilation output ending with:
 ```
@@ -338,7 +338,7 @@ Finished `release` profile [optimized] target(s) in ...
 
 **[4/5] Installing skill and heartbeat files**
 
-No input needed. Files are copied to `~/.ironclaw/`.
+No input needed. Files are copied to `~/.brassclaw/`.
 
 ---
 
@@ -348,11 +348,11 @@ No input needed. Files are copied to `~/.ironclaw/`.
 HA Token: 
 ```
 
-Paste your token and press Enter. The installer calls `ironclaw tool auth ha-tool` to store it in IronClaw's encrypted secret store.
+Paste your token and press Enter. The installer calls `brassclaw tool auth ha-tool` to store it in BrassClaw's encrypted secret store.
 
-IronClaw may show its own prompt — follow the on-screen instructions and paste the token again when asked.
+BrassClaw may show its own prompt — follow the on-screen instructions and paste the token again when asked.
 
-> If your token still works and you are re-installing, run `ironclaw tool auth ha-tool` directly to update it without re-running the full installer.
+> If your token still works and you are re-installing, run `brassclaw tool auth ha-tool` directly to update it without re-running the full installer.
 
 ---
 
@@ -362,10 +362,10 @@ IronClaw may show its own prompt — follow the on-screen instructions and paste
 ✓ ha-tool installed successfully!
 
 Configuration saved:
-  HA URL:     ~/.ironclaw/.ha_url
-  Skill:      ~/.ironclaw/skills/home-assistant/SKILL.md
-  Heartbeat:  ~/.ironclaw/HEARTBEAT.md
-  Routines:   ~/.ironclaw/routines.md
+  HA URL:     ~/.brassclaw/.ha_url
+  Skill:      ~/.brassclaw/skills/home-assistant/SKILL.md
+  Heartbeat:  ~/.brassclaw/HEARTBEAT.md
+  Routines:   ~/.brassclaw/routines.md
 ```
 
 ---
@@ -375,7 +375,7 @@ Configuration saved:
 ### 3.1 — Start a chat
 
 ```bash
-ironclaw chat
+brassclaw chat
 ```
 
 Wait for the prompt to appear.
@@ -472,11 +472,11 @@ Send a notification to my phone: "Garage is open".
 
 ## Background Monitoring
 
-The installer places two files in `~/.ironclaw/` that enable automatic monitoring of your Home Assistant. These are optional — the extension works without them.
+The installer places two files in `~/.brassclaw/` that enable automatic monitoring of your Home Assistant. These are optional — the extension works without them.
 
-### Heartbeat Monitoring (`~/.ironclaw/HEARTBEAT.md`)
+### Heartbeat Monitoring (`~/.brassclaw/HEARTBEAT.md`)
 
-IronClaw reads `HEARTBEAT.md` on every heartbeat tick (default every 30 minutes) and automatically runs these read-only checks:
+BrassClaw reads `HEARTBEAT.md` on every heartbeat tick (default every 30 minutes) and automatically runs these read-only checks:
 
 - **Reachability** — is HA responding?
 - **Config validation** — is the YAML configuration valid?
@@ -486,17 +486,17 @@ IronClaw reads `HEARTBEAT.md` on every heartbeat tick (default every 30 minutes)
 
 If anything is wrong, the agent sends you a notification with proposed fixes. **It never makes changes without your explicit confirmation.**
 
-To enable heartbeat monitoring, configure a heartbeat schedule in IronClaw. See the IronClaw documentation for `HEARTBEAT_INTERVAL_SECS`.
+To enable heartbeat monitoring, configure a heartbeat schedule in BrassClaw. See the BrassClaw documentation for `HEARTBEAT_INTERVAL_SECS`.
 
 ---
 
-### Scheduled Routines (`~/.ironclaw/routines.md`)
+### Scheduled Routines (`~/.brassclaw/routines.md`)
 
 `routines.md` contains ready-to-use prompts for creating scheduled monitoring jobs. To set up a routine:
 
-1. Open `~/.ironclaw/routines.md` in any text editor
+1. Open `~/.brassclaw/routines.md` in any text editor
 2. Copy one of the routine prompts (the text inside the triple backtick blocks)
-3. Start a chat: `ironclaw chat`
+3. Start a chat: `brassclaw chat`
 4. Paste the prompt and send it
 5. The agent creates the cron job for you
 
@@ -519,7 +519,7 @@ All routines are **read-only by design** — they never change anything without 
 To update to the latest version:
 
 ```bash
-cd ironclaw-home-assistant-skill
+cd brassclaw-home-assistant-skill
 git pull
 ./local/scripts/install.sh    # or ./scripts/install.sh for remote
 ```
@@ -543,9 +543,9 @@ What happens when you re-run the installer:
 
 ### "Tool 'shell' failed: Tool shell not found"
 
-The agent tried to use the `shell` tool but it is not available in the current context (it is only registered at IronClaw startup with `allow_local_tools = true`, and not available in scheduled jobs or server mode).
+The agent tried to use the `shell` tool but it is not available in the current context (it is only registered at BrassClaw startup with `allow_local_tools = true`, and not available in scheduled jobs or server mode).
 
-**Fix:** Set `HTTP_ALLOW_LOCALHOST=true` in your IronClaw environment and restart. The agent will use the built-in `http` tool instead, which works everywhere.
+**Fix:** Set `HTTP_ALLOW_LOCALHOST=true` in your BrassClaw environment and restart. The agent will use the built-in `http` tool instead, which works everywhere.
 
 See [2A.3 — Set HTTP_ALLOW_LOCALHOST=true](#2a3--set-http_allow_localhosttrue-required) for how to set it.
 
@@ -553,17 +553,17 @@ See [2A.3 — Set HTTP_ALLOW_LOCALHOST=true](#2a3--set-http_allow_localhosttrue-
 
 ### "only https URLs are allowed" or "private or local IPs are not allowed"
 
-The `http` tool is available but `HTTP_ALLOW_LOCALHOST=true` is not set (or IronClaw was not restarted after setting it).
+The `http` tool is available but `HTTP_ALLOW_LOCALHOST=true` is not set (or BrassClaw was not restarted after setting it).
 
-**Fix:** Set `HTTP_ALLOW_LOCALHOST=true` and **restart IronClaw**. Just setting the variable without restarting does nothing.
+**Fix:** Set `HTTP_ALLOW_LOCALHOST=true` and **restart BrassClaw**. Just setting the variable without restarting does nothing.
 
 ---
 
-### `ironclaw: command not found`
+### `brassclaw: command not found`
 
-IronClaw is not installed or not in your PATH.
+BrassClaw is not installed or not in your PATH.
 
-**Fix:** Install IronClaw from https://github.com/nearai/ironclaw and make sure its binary is in your PATH.
+**Fix:** Install BrassClaw from https://github.com/nearai/brassclaw and make sure its binary is in your PATH.
 
 ---
 
@@ -616,14 +616,14 @@ The skill file is not loaded.
 
 **Fix:** Check that the skill is installed:
 ```bash
-ironclaw skills list
+brassclaw skills list
 ```
 
 You should see `home-assistant-local` (local extension) or `home-assistant` (remote extension). If neither appears, re-run the installer.
 
 ---
 
-### Both "home-assistant" and "home-assistant-local" appear in `ironclaw skills list`
+### Both "home-assistant" and "home-assistant-local" appear in `brassclaw skills list`
 
 Both installers have been run. Having both wastes token budget.
 
@@ -635,7 +635,7 @@ Both installers have been run. Having both wastes token budget.
 
 `HTTP_ALLOW_LOCALHOST=true` is set in your CLI shell but not in the service/daemon that runs the heartbeat.
 
-**Fix:** Make sure the environment variable is set where IronClaw is actually running (the service, not just your terminal session). See [2A.3](#2a3--set-http_allow_localhosttrue-required).
+**Fix:** Make sure the environment variable is set where BrassClaw is actually running (the service, not just your terminal session). See [2A.3](#2a3--set-http_allow_localhosttrue-required).
 
 ---
 
@@ -678,31 +678,31 @@ After the script finishes, you still need to:
 ### Two Variants
 
 **Local extension** (`local/`)
-- Uses IronClaw's built-in `http` tool (preferred when `HTTP_ALLOW_LOCALHOST=true`) or `shell + curl` (fallback when `allow_local_tools = true`)
+- Uses BrassClaw's built-in `http` tool (preferred when `HTTP_ALLOW_LOCALHOST=true`) or `shell + curl` (fallback when `allow_local_tools = true`)
 - The agent tries `http` first; if it gets an SSRF/HTTPS error, it falls back to `shell`
 - No compilation required — installs in under 5 seconds
 - Works with `http://` and private IPs
 
 **Remote extension** (`tools-src/ha-tool/`)
-- A Rust WASM component compiled to `wasm32-wasip2` and loaded into IronClaw's sandbox
+- A Rust WASM component compiled to `wasm32-wasip2` and loaded into BrassClaw's sandbox
 - The sandbox enforces HTTPS and blocks private IPs — only Nabu Casa and DuckDNS domains are permitted
 - Provides structured JSON responses, strong input validation, compact entity projection, and SSRF protection
-- The HA token is managed by IronClaw's secret store and injected automatically — the WASM component never sees the raw token value
+- The HA token is managed by BrassClaw's secret store and injected automatically — the WASM component never sees the raw token value
 
 ### Files Installed
 
 | File | Location | Purpose |
 |---|---|---|
-| `SKILL.md` | `~/.ironclaw/skills/home-assistant[-local]/SKILL.md` | Tells IronClaw's AI when and how to use the extension |
-| `HEARTBEAT.md` | `~/.ironclaw/HEARTBEAT.md` | Read-only health check instructions for heartbeat ticks; contains injected URL + token (`chmod 600`, local only) |
-| `routines.md` | `~/.ironclaw/routines.md` | Ready-to-paste prompts for cron monitoring jobs; contains injected URL + token (`chmod 600`, local only) |
-| `.ha_url` | `~/.ironclaw/.ha_url` | Saved HA URL (reused across reinstalls) |
-| `.ha_token` | `~/.ironclaw/.ha_token` | Saved HA token (local extension only, `chmod 600`) |
+| `SKILL.md` | `~/.brassclaw/skills/home-assistant[-local]/SKILL.md` | Tells BrassClaw's AI when and how to use the extension |
+| `HEARTBEAT.md` | `~/.brassclaw/HEARTBEAT.md` | Read-only health check instructions for heartbeat ticks; contains injected URL + token (`chmod 600`, local only) |
+| `routines.md` | `~/.brassclaw/routines.md` | Ready-to-paste prompts for cron monitoring jobs; contains injected URL + token (`chmod 600`, local only) |
+| `.ha_url` | `~/.brassclaw/.ha_url` | Saved HA URL (reused across reinstalls) |
+| `.ha_token` | `~/.brassclaw/.ha_token` | Saved HA token (local extension only, `chmod 600`) |
 
 ### Project Structure
 
 ```
-ironclaw-home-assistant-skill/
+brassclaw-home-assistant-skill/
 ├── local/                     # Local extension (http tool + shell fallback)
 │   ├── scripts/install.sh     #   Installer — run this for local http:// HA
 │   ├── skills/SKILL.md        #   AI skill hint (dual-mode: http/shell)

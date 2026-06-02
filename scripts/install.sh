@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TOOL_SRC="$ROOT_DIR/tools-src/ha-tool"
-IRONCLAW_DIR="${HOME}/.ironclaw"
-HA_URL_FILE="$IRONCLAW_DIR/.ha_url"
+BRASSCLAW_DIR="${HOME}/.brassclaw"
+HA_URL_FILE="$BRASSCLAW_DIR/.ha_url"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -101,7 +101,7 @@ prompt_ha_url() {
         fi
     done
 
-    mkdir -p "$IRONCLAW_DIR"
+    mkdir -p "$BRASSCLAW_DIR"
     echo "$url" > "$HA_URL_FILE"
     HA_URL="$url"
 }
@@ -144,16 +144,16 @@ if ! command -v cargo &>/dev/null; then
     exit 1
 fi
 
-if ! command -v ironclaw &>/dev/null; then
-    error "ironclaw CLI not found."
+if ! command -v brassclaw &>/dev/null; then
+    error "brassclaw CLI not found."
     echo ""
-    echo "  Install IronClaw: https://github.com/nearai/ironclaw"
+    echo "  Install BrassClaw: https://github.com/nearai/brassclaw"
     echo ""
     exit 1
 fi
 
 echo ""
-echo "  ${BOLD}IronClaw Home Assistant Extension — Installer${NC}"
+echo "  ${BOLD}BrassClaw Home Assistant Extension — Installer${NC}"
 echo "  ─────────────────────────────────────────────"
 
 # --- Step 1: Ensure build dependencies ---
@@ -204,22 +204,22 @@ fi
 # --- Step 3: Install ha-tool ---
 
 step 3 "Installing ha-tool from source..."
-ironclaw tool install "$TOOL_SRC"
+brassclaw tool install "$TOOL_SRC"
 
 # --- Step 4: Install optional files ---
 
 step 4 "Installing skill and heartbeat files..."
 
 SKILL_SRC="$ROOT_DIR/skills/SKILL.md"
-SKILL_DEST_DIR="$IRONCLAW_DIR/skills/home-assistant"
+SKILL_DEST_DIR="$BRASSCLAW_DIR/skills/home-assistant"
 SKILL_DEST="$SKILL_DEST_DIR/SKILL.md"
 SKILL_STATUS="not_found"
-OLD_SKILL_PATH="$IRONCLAW_DIR/skills/home-assistant.SKILL.md"
+OLD_SKILL_PATH="$BRASSCLAW_DIR/skills/home-assistant.SKILL.md"
 if [[ -f "$OLD_SKILL_PATH" ]]; then
     rm -f "$OLD_SKILL_PATH"
     info "Removed old skill file at wrong path: $OLD_SKILL_PATH"
 fi
-LOCAL_SKILL_DIR="$IRONCLAW_DIR/skills/home-assistant-local"
+LOCAL_SKILL_DIR="$BRASSCLAW_DIR/skills/home-assistant-local"
 if [[ -d "$LOCAL_SKILL_DIR" ]]; then
     warn "Local extension skill found at $LOCAL_SKILL_DIR"
     echo "  The local and remote extensions have overlapping keywords."
@@ -254,7 +254,7 @@ else
 fi
 
 HEARTBEAT_SRC="$ROOT_DIR/heartbeat/HEARTBEAT.md"
-HEARTBEAT_DEST="$IRONCLAW_DIR/HEARTBEAT.md"
+HEARTBEAT_DEST="$BRASSCLAW_DIR/HEARTBEAT.md"
 if [[ -f "$HEARTBEAT_SRC" ]]; then
     if [[ -f "$HEARTBEAT_DEST" ]]; then
         if grep -q '<!-- VARIANT: local -->' "$HEARTBEAT_DEST" 2>/dev/null; then
@@ -279,7 +279,7 @@ else
 fi
 
 ROUTINES_SRC="$ROOT_DIR/heartbeat/routines.md"
-ROUTINES_DEST="$IRONCLAW_DIR/routines.md"
+ROUTINES_DEST="$BRASSCLAW_DIR/routines.md"
 if [[ -f "$ROUTINES_SRC" ]]; then
     if [[ -f "$ROUTINES_DEST" ]]; then
         if grep -q '<!-- VARIANT: local -->' "$ROUTINES_DEST" 2>/dev/null; then
@@ -310,9 +310,9 @@ echo ""
 echo "  Create a long-lived access token in Home Assistant:"
 echo "    1. Open ${BOLD}${HA_URL}/profile${NC} in your browser"
 echo "    2. Scroll to ${BOLD}Long-Lived Access Tokens${NC}"
-echo "    3. Click ${BOLD}Create Token${NC}, name it (e.g. 'ironclaw'), copy the token"
+echo "    3. Click ${BOLD}Create Token${NC}, name it (e.g. 'brassclaw'), copy the token"
 echo ""
-ironclaw tool auth ha-tool
+brassclaw tool auth ha-tool
 
 # --- Done ---
 
@@ -322,11 +322,11 @@ echo "  ${GREEN}  ✓ ha-tool installed successfully!${NC}"
 echo "  ${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "  ${BOLD}Verify:${NC}"
-echo "    ironclaw tool list"
-echo "    ironclaw tool info ha-tool"
+echo "    brassclaw tool list"
+echo "    brassclaw tool info ha-tool"
 echo ""
 echo "  ${BOLD}Quick test:${NC}"
-echo "    ironclaw chat"
+echo "    brassclaw chat"
 echo "    > Is my Home Assistant at ${HA_URL} online?"
 echo ""
 echo "  ${BOLD}Configuration saved:${NC}"

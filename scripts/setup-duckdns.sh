@@ -3,8 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-IRONCLAW_DIR="${HOME}/.ironclaw"
-HA_URL_FILE="$IRONCLAW_DIR/.ha_url"
+BRASSCLAW_DIR="${HOME}/.brassclaw"
+HA_URL_FILE="$BRASSCLAW_DIR/.ha_url"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -41,7 +41,7 @@ echo ""
 echo "  This script configures the DuckDNS add-on on your HA OS instance"
 echo "  with automatic Let's Encrypt TLS certificates. After setup, your"
 echo "  HA instance will be reachable at https://<domain>.duckdns.org with"
-echo "  a valid certificate — compatible with the IronClaw sandbox."
+echo "  a valid certificate — compatible with the BrassClaw sandbox."
 echo ""
 echo "  ${BOLD}Prerequisites:${NC}"
 echo "    - Home Assistant OS (Supervisor required)"
@@ -267,7 +267,7 @@ echo ""
 echo "  ${BOLD}4. Access HA via:${NC}"
 echo "     ${GREEN}https://${DUCK_DOMAIN}${NC}"
 echo ""
-echo "  ${BOLD}5. Update your IronClaw HA URL:${NC}"
+echo "  ${BOLD}5. Update your BrassClaw HA URL:${NC}"
 echo "     Re-run ${BOLD}scripts/install.sh${NC} and enter"
 echo "     ${GREEN}https://${DUCK_DOMAIN}${NC} as the URL."
 echo ""

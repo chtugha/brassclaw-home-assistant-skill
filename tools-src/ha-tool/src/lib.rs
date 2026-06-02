@@ -57,7 +57,7 @@ impl exports::near::agent::tool::Guest for HaTool {
 fn execute_inner(params: &str) -> Result<String, String> {
     if !crate::near::agent::host::secret_exists("ha_token") {
         return Err(
-            "Home Assistant token not configured. Run: ironclaw tool auth ha-tool".to_string(),
+            "Home Assistant token not configured. Run: brassclaw tool auth ha-tool".to_string(),
         );
     }
 

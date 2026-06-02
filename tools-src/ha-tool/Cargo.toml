@@ -2,7 +2,7 @@
 name = "ha-tool"
 version = "0.5.0"
 edition = "2021"
-description = "Home Assistant integration tool for IronClaw (WASM component)"
+description = "Home Assistant integration tool for BrassClaw (WASM component)"
 license = "MIT OR Apache-2.0"
 publish = false
 
@@ -23,4 +23,4 @@ codegen-units = 1
 
 [workspace]
 # Standalone crate — empty workspace block prevents a parent Cargo
-# workspace from absorbing this crate during `ironclaw tool install <path>`.
+# workspace from absorbing this crate during `brassclaw tool install <path>`.

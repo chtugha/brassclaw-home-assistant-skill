@@ -5,7 +5,7 @@
      every {{HA_URL}} with your HA base URL and {{HA_TOKEN}} with your
      long-lived access token. -->
 
-IronClaw reads this file on every heartbeat tick (default: every 30 minutes).
+BrassClaw reads this file on every heartbeat tick (default: every 30 minutes).
 It runs read-only health checks, detects problems, and proposes fixes.
 No changes are made without your explicit confirmation.
 
@@ -14,21 +14,21 @@ No changes are made without your explicit confirmation.
 This heartbeat supports two modes:
 
 **Mode A — `http` tool (preferred)**: Always available. Requires
-`HTTP_ALLOW_LOCALHOST=true` in the IronClaw environment.
+`HTTP_ALLOW_LOCALHOST=true` in the BrassClaw environment.
 
 **Mode B — `shell` tool (fallback)**: Requires `allow_local_tools = true`
-at IronClaw startup.
+at BrassClaw startup.
 
 At tick start, try the `http` tool first. If it returns an SSRF/HTTPS
 restriction error, fall back to `shell`. If neither works, send a single
 notification: "HA heartbeat: no usable tool. Set HTTP_ALLOW_LOCALHOST=true
-and restart IronClaw." Then skip all checks.
+and restart BrassClaw." Then skip all checks.
 
 ## API Call Method
 
 At tick start, obtain the token and URL:
-- If `shell` is available: `shell: cat ~/.ironclaw/.ha_token` and
-  `shell: cat ~/.ironclaw/.ha_url`
+- If `shell` is available: `shell: cat ~/.brassclaw/.ha_token` and
+  `shell: cat ~/.brassclaw/.ha_url`
 - If only `http` is available: the token and URL below were injected by
   the install script — use them directly.
 

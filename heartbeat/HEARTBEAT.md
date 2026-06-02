@@ -6,7 +6,7 @@
      If you are editing this file manually, replace every {{HA_URL}} with
      your Home Assistant base URL (e.g. http://192.168.1.100:8123). -->
 
-IronClaw reads this file on every heartbeat tick (default: every 30 minutes).
+BrassClaw reads this file on every heartbeat tick (default: every 30 minutes).
 It runs read-only health checks, detects problems, and proposes fixes.
 No changes are made without your explicit confirmation.
 
