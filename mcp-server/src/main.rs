@@ -183,7 +183,7 @@ async fn handle_request(request: JsonRpcRequest) -> Option<JsonRpcResponse> {
                 "tools": [
                     {
                         "name": "ha_search_entities",
-                        "description": "Search for entities by natural-language query.",
+                        "description": "Search Home Assistant entities by name, type, or status. Can find update entities, device states, sensor readings, lights, switches, climate devices, and more. Use with query='update' to find available software updates.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -224,7 +224,7 @@ async fn handle_request(request: JsonRpcRequest) -> Option<JsonRpcResponse> {
                     },
                     {
                         "name": "ha_get_diagnostics",
-                        "description": "Verify configuration health or retrieve system alerts.",
+                        "description": "Check Home Assistant system health, available software updates, configuration status, and system alerts. Use this to check if updates are available for Home Assistant or its integrations.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {}
@@ -1435,6 +1435,47 @@ mod tests {
         assert_eq!(tools_list[2]["name"], "ha_get_diagnostics");
         assert_eq!(tools_list[3]["name"], "ha_edit_config");
         assert_eq!(tools_list[4]["name"], "ha_probe_modbus");
+    }
+
+    #[tokio::test]
+    async fn test_tool_descriptions_contain_update_keywords() {
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "tools/list".to_string(),
+            params: None,
+            id: Some(Id::Number(99)),
+        };
+        let resp = handle_request(req).await.expect("Should return response");
+        let res = resp.result.expect("Should have result");
+        let tools_list = res["tools"].as_array().expect("Should be array");
+
+        let search_desc = tools_list[0]["description"]
+            .as_str()
+            .expect("search description should be string");
+        assert!(
+            search_desc.contains("update"),
+            "ha_search_entities description must mention 'update' for small LLMs to map update queries correctly. Got: {}",
+            search_desc
+        );
+        assert!(
+            search_desc.contains("software updates"),
+            "ha_search_entities description must mention 'software updates'. Got: {}",
+            search_desc
+        );
+
+        let diag_desc = tools_list[2]["description"]
+            .as_str()
+            .expect("diagnostics description should be string");
+        assert!(
+            diag_desc.contains("updates"),
+            "ha_get_diagnostics description must mention 'updates' for small LLMs. Got: {}",
+            diag_desc
+        );
+        assert!(
+            diag_desc.contains("system health"),
+            "ha_get_diagnostics description must mention 'system health'. Got: {}",
+            diag_desc
+        );
     }
 
     #[tokio::test]
