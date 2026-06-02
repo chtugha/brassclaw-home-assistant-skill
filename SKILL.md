@@ -1,7 +1,7 @@
 ---
-name: home-assistant-local
+name: home-assistant
 version: 0.6.0
-description: Control local Home Assistant via MCP
+description: Control Home Assistant via MCP
 activation:
   keywords:
     - home assistant

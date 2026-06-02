@@ -693,7 +693,7 @@ After the script finishes, you still need to:
 
 | File | Location | Purpose |
 |---|---|---|
-| `SKILL.md` | `~/.brassclaw/skills/home-assistant[-local]/SKILL.md` | Tells BrassClaw's AI when and how to use the extension |
+| `SKILL.md` | `~/.brassclaw/skills/home-assistant/SKILL.md` | Tells BrassClaw's AI when and how to use the extension |
 | `HEARTBEAT.md` | `~/.brassclaw/HEARTBEAT.md` | Read-only health check instructions for heartbeat ticks; contains injected URL + token (`chmod 600`, local only) |
 | `routines.md` | `~/.brassclaw/routines.md` | Ready-to-paste prompts for cron monitoring jobs; contains injected URL + token (`chmod 600`, local only) |
 | `.ha_url` | `~/.brassclaw/.ha_url` | Saved HA URL (reused across reinstalls) |
@@ -705,7 +705,6 @@ After the script finishes, you still need to:
 brassclaw-home-assistant-skill/
 ├── local/                     # Local extension (http tool + shell fallback)
 │   ├── scripts/install.sh     #   Installer — run this for local http:// HA
-│   ├── skills/SKILL.md        #   AI skill hint (dual-mode: http/shell)
 │   └── heartbeat/
 │       ├── HEARTBEAT.md       #   Heartbeat template (dual-mode)
 │       └── routines.md        #   Cron routine prompts (dual-mode)
@@ -721,7 +720,7 @@ brassclaw-home-assistant-skill/
 │       ├── api.rs             #   HA REST API calls + validation
 │       └── types.rs           #   JSON schema + data types
 │
-├── skills/SKILL.md            # Remote skill hint (ha-tool actions)
+├── SKILL.md                   # Skill hint (ha-tool/HTTP/shell actions)
 ├── heartbeat/
 │   ├── HEARTBEAT.md           # Remote heartbeat template (ha-tool)
 │   └── routines.md            # Remote cron routine prompts (ha-tool)

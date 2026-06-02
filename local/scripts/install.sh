@@ -230,8 +230,8 @@ if [[ -d "$REMOTE_SKILL_DIR" ]]; then
     info "Removed remote skill: $REMOTE_SKILL_DIR"
 fi
 
-SKILL_SRC="$LOCAL_DIR/skills/SKILL.md"
-SKILL_DEST_DIR="$BRASSCLAW_DIR/skills/home-assistant-local"
+SKILL_SRC="$ROOT_DIR/SKILL.md"
+SKILL_DEST_DIR="$BRASSCLAW_DIR/skills/home-assistant"
 SKILL_DEST="$SKILL_DEST_DIR/SKILL.md"
 SKILL_STATUS="not_found"
 if [[ -f "$SKILL_SRC" ]]; then
@@ -257,7 +257,7 @@ if [[ -f "$SKILL_SRC" ]]; then
         info "Installed skill: $SKILL_DEST"
     fi
 else
-    warn "No SKILL.md found in local/skills/ — skipping."
+    warn "No SKILL.md found — skipping."
 fi
 
 HEARTBEAT_SRC="$LOCAL_DIR/heartbeat/HEARTBEAT.md"

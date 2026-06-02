@@ -210,7 +210,7 @@ brassclaw tool install "$TOOL_SRC"
 
 step 4 "Installing skill and heartbeat files..."
 
-SKILL_SRC="$ROOT_DIR/skills/SKILL.md"
+SKILL_SRC="$ROOT_DIR/SKILL.md"
 SKILL_DEST_DIR="$BRASSCLAW_DIR/skills/home-assistant"
 SKILL_DEST="$SKILL_DEST_DIR/SKILL.md"
 SKILL_STATUS="not_found"
