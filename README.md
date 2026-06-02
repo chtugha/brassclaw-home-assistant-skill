@@ -136,7 +136,7 @@ I'm not sure
 
 ### 2A.1 — Get the code
 
-Open a terminal and run these two commands one at a time:
+Open a terminal in /root and run these two commands one at a time:
 
 ```bash
 git clone https://github.com/chtugha/brassclaw-home-assistant-skill
@@ -171,6 +171,15 @@ http://192.168.1.100:8123
 ```
 
 If the URL passes validation, it is saved automatically. If the installer says the URL looks unusual, you can type `y` to accept it anyway.
+
+
+```
+brassclaw mcp add homeassistant \
+  --transport stdio \
+  --command /root/ironclaw-home-assistant-skill/mcp-server/target/release/mcp-server \
+  --env HA_URL=http://localhost:8123 \
+  --env HA_TOKEN=YOUR_TOKEN_HERE
+```
 
 ---
 
