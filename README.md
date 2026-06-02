@@ -185,7 +185,7 @@ brassclaw mcp add homeassistant \
 ```
 sqlite3 /root/.brassclaw/brassclaw.db <<'EOF'
 UPDATE settings
-SET value='{"schema_version":0,"servers":[{"enabled":true,"install_hint":"Install Node.js from https://nodejs.org to enable browser tools.","name":"playwright","requires_bins":["node","npx"],"transport":{"args":["@playwright/mcp@latest"],"command":"npx","env":{"PLAYWRIGHT_BROWSERS_PATH":"0"},"transport":"stdio"},"url":""},{"enabled":true,"name":"homeassistant","transport":{"args":[],"command":"/root/brassclaw-home-assistant-skill/mcp-server/target/release/mcp-server","env":{"HA_TOKEN":"INSERT-TOKEN","HA_URL":"http://192.XXX.XX.37:8123"},"transport":"stdio"},"url":""}]}'
+SET value='{"schema_version":0,"servers":[{"enabled":true,"install_hint":"Install Node.js from https://nodejs.org to enable browser tools.","name":"playwright","requires_auth":"false","requires_bins":["node","npx"],"transport":{"args":["@playwright/mcp@latest"],"command":"npx","env":{"PLAYWRIGHT_BROWSERS_PATH":"0"},"transport":"stdio"},"url":""},{"enabled":true,"name":"homeassistant","requires_auth":"false","transport":{"args":[],"command":"/root/brassclaw-home-assistant-skill/mcp-server/target/release/mcp-server","env":{"HA_TOKEN":"INSERT-TOKEN","HA_URL":"http://192.XXX.XX.37:8123"},"transport":"stdio"},"url":""}]}'
 WHERE key='mcp_servers';
 EOF
 ```
