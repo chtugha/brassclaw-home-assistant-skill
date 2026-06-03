@@ -9,4 +9,5 @@ build/
 node_modules/
 **/.DS_Store
 ha_proxy.py
+.zenflow/
 

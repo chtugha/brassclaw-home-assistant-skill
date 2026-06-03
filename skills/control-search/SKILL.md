@@ -1,7 +1,7 @@
 ---
-name: home-assistant
+name: home-assistant-control-search
 version: 0.6.0
-description: Control Home Assistant via MCP (Monolithic version)
+description: Control Home Assistant devices and search for entities
 metadata:
   openclaw:
     requires:
@@ -24,35 +24,28 @@ activation:
     - thermostat
     - climate
     - temperature
+    - fan
+    - sensor
+    - state
+    - status
   patterns:
     - "turn (on|off|toggle).*(light|switch|fan|plug|outlet)"
-    - "set up (home assistant|homeassistant) mcp"
-    - "install (home assistant|homeassistant) mcp"
+    - "set (temperature|thermostat|climate|value|brightness)"
+    - "get (status|state) of"
   tags:
     - home-automation
-  max_context_tokens: 3000
+  max_context_tokens: 1500
 ---
 
-# Home Assistant MCP (Monolithic)
+# Home Assistant Control & Search
 
-> **💡 Optimization Note**: To reduce token context size and improve instruction-following accuracy, you can install the individual split subskills from this repository instead:
-> - **Control & Search**: `./skills/control-search/SKILL.md`
-> - **Diagnostics**: `./skills/diagnostics/SKILL.md`
-> - **Config & Modbus**: `./skills/config-modbus/SKILL.md`
-
-Use these tools to manage Home Assistant:
+Use these tools to search for entities and control devices on Home Assistant:
 1. **`homeassistant_ha_search_entities(query, domain=None)`**: Search for entities, status, or updates.
 2. **`homeassistant_ha_control(entity_id, action, value=None)`**: Control devices (turn_on/off, toggle, set_value).
-3. **`homeassistant_ha_get_diagnostics()`**: Check health, logs, or updates.
-4. **`homeassistant_ha_edit_config(action, file=None, old_string=None, new_string=None, offset=None, limit=None)`**: Read or patch configuration files.
-5. **`homeassistant_ha_probe_modbus(register_type, address, host=None, port=None, unit_id=None, count=None)`**: Directly probe Modbus TCP registers.
 
 **Instructions for Common Requests**:
-- **Updates / System Health**: Call `homeassistant_ha_get_diagnostics()`. Also search for `update` entities with `homeassistant_ha_search_entities(query="update")`.
 - **Status of Devices**: Search for the device name/type first to inspect its current state.
 - **Control Devices**: Search to find the exact `entity_id` first, then call control action with that ID.
-- **Editing Configuration**: Read or patch configuration using `homeassistant_ha_edit_config`. Make sure to search the configuration layout first using read.
-- **Modbus Regs**: Probe registers directly with `homeassistant_ha_probe_modbus`.
 
 ## Self-Installation and Registration (For the Agent)
 
