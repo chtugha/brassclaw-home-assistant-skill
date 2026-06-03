@@ -4,10 +4,6 @@ version: 0.6.0
 description: Control Home Assistant via MCP (Monolithic version)
 metadata:
   openclaw:
-    requires:
-      env:
-        - HA_URL
-        - HA_TOKEN
     envVars:
       - name: HA_URL
         required: true

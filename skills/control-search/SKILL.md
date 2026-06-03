@@ -4,10 +4,6 @@ version: 0.6.0
 description: Control Home Assistant devices and search for entities
 metadata:
   openclaw:
-    requires:
-      env:
-        - HA_URL
-        - HA_TOKEN
     envVars:
       - name: HA_URL
         required: true

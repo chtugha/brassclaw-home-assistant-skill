@@ -4,10 +4,6 @@ version: 0.6.0
 description: Read and edit Home Assistant configuration files and probe Modbus registers
 metadata:
   openclaw:
-    requires:
-      env:
-        - HA_URL
-        - HA_TOKEN
     envVars:
       - name: HA_URL
         required: true

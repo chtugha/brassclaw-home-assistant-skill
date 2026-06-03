@@ -4,10 +4,6 @@ version: 0.6.0
 description: Check Home Assistant system health, software updates, and logs/alerts
 metadata:
   openclaw:
-    requires:
-      env:
-        - HA_URL
-        - HA_TOKEN
     envVars:
       - name: HA_URL
         required: true
