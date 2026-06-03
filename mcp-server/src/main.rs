@@ -722,7 +722,119 @@ async fn fetch_ha_config(ha_url: &str, ha_token: &str) -> Result<serde_json::Val
     Ok(config)
 }
 
-async fn fetch_ha_error_log(ha_url: &str, ha_token: &str) -> Result<String, String> {
+async fn fetch_ha_error_log_ws(ha_url: &str, ha_token: &str) -> Result<String, String> {
+    let ws_url = if ha_url.starts_with("https://") {
+        format!("wss://{}", &ha_url["https://".len()..])
+    } else if ha_url.starts_with("http://") {
+        format!("ws://{}", &ha_url["http://".len()..])
+    } else {
+        ha_url.to_string()
+    };
+    let ws_endpoint = format!("{}/api/websocket", ws_url.trim_end_matches('/'));
+
+    use tokio_tungstenite::connect_async;
+    use futures_util::{StreamExt, SinkExt};
+
+    let (mut ws_stream, _) = connect_async(&ws_endpoint).await
+        .map_err(|e| format!("WebSocket connection failed: {}", e))?;
+
+    let msg = ws_stream.next().await
+        .ok_or_else(|| "No message from WebSocket".to_string())?
+        .map_err(|e| format!("WS read error: {}", e))?;
+
+    let msg_text = msg.to_text().map_err(|e| format!("Invalid WS text: {}", e))?;
+    let auth_req: serde_json::Value = serde_json::from_str(msg_text)
+        .map_err(|e| format!("Parse error: {}", e))?;
+
+    if auth_req.get("type").and_then(|v| v.as_str()) != Some("auth_required") {
+        return Err("Expected auth_required".to_string());
+    }
+
+    let auth_msg = serde_json::json!({
+        "type": "auth",
+        "access_token": ha_token
+    });
+    ws_stream.send(tokio_tungstenite::tungstenite::Message::Text(auth_msg.to_string())).await
+        .map_err(|e| format!("WS send error: {}", e))?;
+
+    let msg = ws_stream.next().await
+        .ok_or_else(|| "No auth response".to_string())?
+        .map_err(|e| format!("WS read error: {}", e))?;
+
+    let msg_text = msg.to_text().map_err(|e| format!("Invalid WS text: {}", e))?;
+    let auth_resp: serde_json::Value = serde_json::from_str(msg_text)
+        .map_err(|e| format!("Parse error: {}", e))?;
+
+    if auth_resp.get("type").and_then(|v| v.as_str()) != Some("auth_ok") {
+        return Err("Auth failed".to_string());
+    }
+
+    let req_msg = serde_json::json!({
+        "id": 1,
+        "type": "system_log/list"
+    });
+    ws_stream.send(tokio_tungstenite::tungstenite::Message::Text(req_msg.to_string())).await
+        .map_err(|e| format!("WS send error: {}", e))?;
+
+    let msg = ws_stream.next().await
+        .ok_or_else(|| "No system_log response".to_string())?
+        .map_err(|e| format!("WS read error: {}", e))?;
+
+    let msg_text = msg.to_text().map_err(|e| format!("Invalid WS text: {}", e))?;
+    let response_val: serde_json::Value = serde_json::from_str(msg_text)
+        .map_err(|e| format!("Parse error: {}", e))?;
+
+    if response_val.get("success").and_then(|v| v.as_bool()) != Some(true) {
+        return Err("system_log/list failed".to_string());
+    }
+
+    let result_arr = response_val.get("result")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "Invalid result format".to_string())?;
+
+    let mut log_lines = Vec::new();
+    for entry in result_arr {
+        let timestamp = entry.get("timestamp")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let level = entry.get("level")
+            .and_then(|v| v.as_str())
+            .unwrap_or("ERROR");
+        let name = entry.get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+
+        let message = if let Some(msg_val) = entry.get("message") {
+            if let Some(arr) = msg_val.as_array() {
+                arr.iter()
+                    .map(|v| v.as_str().unwrap_or("").to_string())
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            } else if let Some(s) = msg_val.as_str() {
+                s.to_string()
+            } else {
+                msg_val.to_string()
+            }
+        } else {
+            "".to_string()
+        };
+
+        let exception = entry.get("exception")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let line = if exception.is_empty() {
+            format!("{} [{}] ({}) {}", timestamp, level, name, message)
+        } else {
+            format!("{} [{}] ({}) {}\n{}", timestamp, level, name, message, exception)
+        };
+        log_lines.push(line);
+    }
+
+    Ok(log_lines.join("\n"))
+}
+
+async fn fetch_ha_error_log_http(ha_url: &str, ha_token: &str) -> Result<String, String> {
     let base_url = ha_url.trim_end_matches('/');
     let url = format!("{}/api/error_log", base_url);
 
@@ -747,6 +859,13 @@ async fn fetch_ha_error_log(ha_url: &str, ha_token: &str) -> Result<String, Stri
         .map_err(|e| format!("Failed to read HA error log: {}", e))?;
 
     Ok(log)
+}
+
+async fn fetch_ha_error_log(ha_url: &str, ha_token: &str) -> Result<String, String> {
+    match fetch_ha_error_log_ws(ha_url, ha_token).await {
+        Ok(log) => Ok(log),
+        Err(_) => fetch_ha_error_log_http(ha_url, ha_token).await,
+    }
 }
 
 fn compact_and_truncate_log(log: &str, max_chars: usize) -> String {
