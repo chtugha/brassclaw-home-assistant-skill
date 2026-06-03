@@ -57,6 +57,6 @@ Update `./.zenflow/tasks/our-ironclaw-fork-was-rebranded-6a40/plan.md` if it mak
 ### [x] Step 8: Commit and push installation feature changes to GitHub
 - Execute git commit and push
 
-### [ ] Step 9: Test installation and functionality on real testing machine
+### [x] Step 9: Test installation and functionality on real testing machine
 - Test on 192.168.10.169
 - Test Home Assistant integration on 192.168.19.37
