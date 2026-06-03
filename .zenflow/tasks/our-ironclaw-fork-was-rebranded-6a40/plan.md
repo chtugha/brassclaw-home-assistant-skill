@@ -54,7 +54,7 @@ Update `./.zenflow/tasks/our-ironclaw-fork-was-rebranded-6a40/plan.md` if it mak
 - Scan https://github.com/chtugha/brassclaw
 - Add necessary code to support name & url skill installation
 
-### [ ] Step 8: Commit and push installation feature changes to GitHub
+### [x] Step 8: Commit and push installation feature changes to GitHub
 - Execute git commit and push
 
 ### [ ] Step 9: Test installation and functionality on real testing machine
