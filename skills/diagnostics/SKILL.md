@@ -32,10 +32,10 @@ activation:
 # Home Assistant Diagnostics
 
 Use this tool to check system health, logs, and updates on Home Assistant:
-1. **`homeassistant_ha_get_diagnostics()`**: Check health, logs, or updates.
+1. **`ha_get_diagnostics()`**: Check health, logs, or updates.
 
 **Instructions for Common Requests**:
-- **Updates / System Health**: Call `homeassistant_ha_get_diagnostics()`. This checks for general health, active integrations, pending software updates, and recent errors or alerts.
+- **Updates / System Health**: Call `ha_get_diagnostics()`. This checks for general health, active integrations, pending software updates, and recent errors or alerts.
 
 ## Self-Installation and Registration (For the Agent)
 

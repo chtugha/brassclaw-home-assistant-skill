@@ -36,8 +36,8 @@ activation:
 # Home Assistant Control & Search
 
 Use these tools to search for entities and control devices on Home Assistant:
-1. **`homeassistant_ha_search_entities(query, domain=None)`**: Search for entities, status, or updates.
-2. **`homeassistant_ha_control(entity_id, action, value=None)`**: Control devices (turn_on/off, toggle, set_value).
+1. **`ha_search_entities(query, domain=None)`**: Search for entities, status, or updates.
+2. **`ha_control(entity_id, action, value=None)`**: Control devices (turn_on/off, toggle, set_value).
 
 **Instructions for Common Requests**:
 - **Status of Devices**: Search for the device name/type first to inspect its current state.
