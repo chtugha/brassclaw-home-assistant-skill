@@ -34,12 +34,12 @@ activation:
 # Home Assistant Config & Modbus
 
 Use these tools to edit configurations or probe Modbus TCP registers on Home Assistant:
-1. **`ha_edit_config(action, file=None, old_string=None, new_string=None, offset=None, limit=None)`**: Read or patch configuration files.
-2. **`ha_probe_modbus(register_type, address, host=None, port=None, unit_id=None, count=None)`**: Directly probe Modbus TCP registers.
+1. **`homeassistant_ha_edit_config(action, file=None, old_string=None, new_string=None, offset=None, limit=None)`**: Read or patch configuration files.
+2. **`homeassistant_ha_probe_modbus(register_type, address, host=None, port=None, unit_id=None, count=None)`**: Directly probe Modbus TCP registers.
 
 **Instructions for Common Requests**:
-- **Editing Configuration**: Read or patch configuration using `ha_edit_config`. Make sure to search the configuration layout first using read.
-- **Modbus Regs**: Probe registers directly with `ha_probe_modbus`.
+- **Editing Configuration**: Read or patch configuration using `homeassistant_ha_edit_config`. Make sure to search the configuration layout first using read.
+- **Modbus Regs**: Probe registers directly with `homeassistant_ha_probe_modbus`.
 
 ## Self-Installation and Registration (For the Agent)
 

@@ -12,9 +12,9 @@ To dramatically reduce prompt context size, increase instruction-following accur
 
 | Skill | Description | Supported Tools |
 |---|---|---|
-| **Control & Search** | Search entities and control devices. | `ha_search_entities`, `ha_control` |
-| **Diagnostics** | Check health, pending updates, and alerts. | `ha_get_diagnostics` |
-| **Config & Modbus** | Edit configuration.yaml and probe Modbus. | `ha_edit_config`, `ha_probe_modbus` |
+| **Control & Search** | Search entities and control devices. | `homeassistant_ha_search_entities`, `homeassistant_ha_control` |
+| **Diagnostics** | Check health, pending updates, and alerts. | `homeassistant_ha_get_diagnostics` |
+| **Config & Modbus** | Edit configuration.yaml and probe Modbus. | `homeassistant_ha_edit_config`, `homeassistant_ha_probe_modbus` |
 
 ---
 
@@ -72,15 +72,15 @@ Once the skill is installed and configured, the BrassClaw agent automatically kn
 
 Once installed, your agent gains access to the following 5 tools:
 
-1. **`ha_search_entities(query, domain=None)`**  
+1. **`homeassistant_ha_search_entities(query, domain=None)`**  
    Search Home Assistant entities, sensors, or devices by name, type, area, or status.
-2. **`ha_control(entity_id, action, value=None)`**  
+2. **`homeassistant_ha_control(entity_id, action, value=None)`**  
    Perform control actions (e.g. `turn_on`, `turn_off`, `toggle`, `set_value` for dimming or temperature).
-3. **`ha_get_diagnostics()`**  
+3. **`homeassistant_ha_get_diagnostics()`**  
    Check system health, configuration validity, software updates, and recent system logs/alerts.
-4. **`ha_edit_config(action, file=None, old_string=None, new_string=None, offset=None, limit=None)`**  
+4. **`homeassistant_ha_edit_config(action, file=None, old_string=None, new_string=None, offset=None, limit=None)`**  
    Safely read or patch configuration files (like `configuration.yaml`) using a token-efficient pattern.
-5. **`ha_probe_modbus(register_type, address, host=None, port=None, unit_id=None, count=None)`**  
+5. **`homeassistant_ha_probe_modbus(register_type, address, host=None, port=None, unit_id=None, count=None)`**  
    Directly probe Modbus TCP registers or coils for advanced integrations.
 
 ---
