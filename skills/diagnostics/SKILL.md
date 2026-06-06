@@ -11,6 +11,22 @@ metadata:
       - name: HA_TOKEN
         required: true
         description: Long-lived Access Token generated in Home Assistant Profile
+credentials:
+  - name: HA_URL
+    provider: homeassistant
+    location:
+      type: header
+      name: X-HA-URL
+    hosts:
+      - "*"
+    setup_instructions: "Enter the Home Assistant URL (e.g., http://192.168.19.37:8123)"
+  - name: HA_TOKEN
+    provider: homeassistant
+    location:
+      type: bearer
+    hosts:
+      - "*"
+    setup_instructions: "Enter your Long-lived Access Token generated in your Home Assistant profile"
 activation:
   keywords:
     - home assistant
