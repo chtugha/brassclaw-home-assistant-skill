@@ -379,10 +379,12 @@ async fn handle_request(request: JsonRpcRequest) -> Option<JsonRpcResponse> {
 
 async fn fetch_entities_from_ha() -> Result<Vec<CachedEntity>, String> {
     let ha_url = std::env::var("HA_URL")
+        .or_else(|_| std::env::var("ha_url"))
         .or_else(|_| std::env::var("HOME_ASSISTANT_URL"))
         .map_err(|_| "HA_URL environment variable is not set".to_string())?;
 
     let ha_token = std::env::var("HA_TOKEN")
+        .or_else(|_| std::env::var("ha_token"))
         .or_else(|_| std::env::var("HOME_ASSISTANT_API_KEY"))
         .map_err(|_| "HA_TOKEN environment variable is not set".to_string())?;
 
@@ -918,8 +920,12 @@ fn compact_and_truncate_log(log: &str, max_chars: usize) -> String {
 }
 
 async fn get_ha_diagnostics() -> serde_json::Value {
-    let ha_url = std::env::var("HA_URL").or_else(|_| std::env::var("HOME_ASSISTANT_URL"));
-    let ha_token = std::env::var("HA_TOKEN").or_else(|_| std::env::var("HOME_ASSISTANT_API_KEY"));
+    let ha_url = std::env::var("HA_URL")
+        .or_else(|_| std::env::var("ha_url"))
+        .or_else(|_| std::env::var("HOME_ASSISTANT_URL"));
+    let ha_token = std::env::var("HA_TOKEN")
+        .or_else(|_| std::env::var("ha_token"))
+        .or_else(|_| std::env::var("HOME_ASSISTANT_API_KEY"));
 
     let (status, version, error_log_raw) = match (ha_url, ha_token) {
         (Ok(url), Ok(token)) => {
@@ -1429,9 +1435,12 @@ async fn handle_tool_call(params: CallToolParams) -> Result<serde_json::Value, S
                 control_args.value.clone(),
             )?;
 
-            let ha_url = std::env::var("HA_URL").or_else(|_| std::env::var("HOME_ASSISTANT_URL"));
-            let ha_token =
-                std::env::var("HA_TOKEN").or_else(|_| std::env::var("HOME_ASSISTANT_API_KEY"));
+            let ha_url = std::env::var("HA_URL")
+                .or_else(|_| std::env::var("ha_url"))
+                .or_else(|_| std::env::var("HOME_ASSISTANT_URL"));
+            let ha_token = std::env::var("HA_TOKEN")
+                .or_else(|_| std::env::var("ha_token"))
+                .or_else(|_| std::env::var("HOME_ASSISTANT_API_KEY"));
 
             let response_value = match (ha_url, ha_token) {
                 (Ok(url), Ok(token)) => {

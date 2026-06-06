@@ -5,14 +5,14 @@ description: Control Home Assistant via MCP (Monolithic version)
 metadata:
   openclaw:
     envVars:
-      - name: HA_URL
+      - name: ha_url
         required: true
         description: The Home Assistant URL (e.g. http://192.168.1.100:8123)
-      - name: HA_TOKEN
+      - name: ha_token
         required: true
         description: Long-lived Access Token generated in Home Assistant Profile
 credentials:
-  - name: HA_URL
+  - name: ha_url
     provider: homeassistant
     location:
       type: header
@@ -20,7 +20,7 @@ credentials:
     hosts:
       - "*"
     setup_instructions: "Enter the Home Assistant URL (e.g., http://192.168.19.37:8123)"
-  - name: HA_TOKEN
+  - name: ha_token
     provider: homeassistant
     location:
       type: bearer
