@@ -1,13 +1,26 @@
-target/
-*.wasm
-Cargo.lock
-.env
-dist/
-build/
-.cache/
+# Editor and IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
 *.log
-node_modules/
-**/.DS_Store
-ha_proxy.py
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+.cache/
+
+# Zenflow
 .zenflow/
 
+# Made with Bob

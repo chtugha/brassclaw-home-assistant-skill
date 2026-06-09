@@ -1,108 +1,196 @@
-# BrassClaw Home Assistant Skill & MCP Server
+# BrassClaw Home Assistant Skill
 
-Add full control over [Home Assistant](https://www.home-assistant.io/) — lights, climate, automations, sensors, MQTT, Modbus, and config editing — to your [BrassClaw](https://github.com/chtugha/brassclaw) AI agent through natural language.
+Add full control over [Home Assistant](https://www.home-assistant.io/) — lights, climate, automations, sensors, and more — to your [BrassClaw](https://github.com/chtugha/brassclaw) AI agent through natural language.
 
-This repository is designed specifically for BrassClaw's modern Model Context Protocol (MCP) server design and supports a fully **UI-Only, zero-terminal installation and configuration flow** for the end user.
+This skill uses BrassClaw's native HTTP tool with automatic credential injection. No external MCP servers or compilation required.
 
 ---
 
 ## 💡 Specialized Subskills vs. Monolithic
 
-To dramatically reduce prompt context size, increase instruction-following accuracy, and maximize the token budget for large payloads (like configuration editing and diagnostic logs), you can install individual focused subskills instead of the monolithic skill.
+To reduce prompt context size and improve performance, you can install individual focused subskills instead of the monolithic skill.
 
-| Skill | Description | Supported Tools |
+| Skill | Description | Context Tokens |
 |---|---|---|
-| **Control & Search** | Search entities and control devices. | `homeassistant_ha_search_entities`, `homeassistant_ha_control` |
-| **Diagnostics** | Check health, pending updates, and alerts. | `homeassistant_ha_get_diagnostics` |
-| **Config & Modbus** | Edit configuration.yaml and probe Modbus. | `homeassistant_ha_edit_config`, `homeassistant_ha_probe_modbus` |
+| **Monolithic** | All features in one skill | 3000 |
+| **Control & Search** | Search entities and control devices | 1500 |
+| **Diagnostics** | Check health, updates, and logs | 2500 |
+| **Config & Modbus** | Edit config and probe Modbus | 3000 |
 
 ---
 
-## 🚀 Step-by-Step Installation (UI Only)
+## 🚀 Installation
 
-### 1. Install the Skill Manifests
+### 1. Install the Skill
 
-You can choose to install either the monolithic skill or the split subskills.
+1. Open your **BrassClaw Web UI** (usually at `http://localhost:3000`)
+2. Go to **Settings** > **Skills**
+3. Scroll to **ADD CUSTOM SKILL**
+4. Choose one of the following:
 
-1. Open your **BrassClaw Web UI** (usually at `http://localhost:3000` or `http://192.168.10.169:3000`).
-2. Go to **Settings** > **Skills** subtab.
-3. Scroll down to the **ADD CUSTOM SKILL** form.
-4. Enter the name and the SKILL.md HTTPS URL of the skill you want to add:
-   - **Monolithic Home Assistant**:
-     - **Skill Name**: `home-assistant`
-     - **HTTPS URL**: `https://raw.githubusercontent.com/chtugha/brassclaw-home-assistant-skill/main/SKILL.md`
-   - **Control & Search**:
-     - **Skill Name**: `home-assistant-control-search`
-     - **HTTPS URL**: `https://raw.githubusercontent.com/chtugha/brassclaw-home-assistant-skill/main/skills/control-search/SKILL.md`
-   - **Diagnostics**:
-     - **Skill Name**: `home-assistant-diagnostics`
-     - **HTTPS URL**: `https://raw.githubusercontent.com/chtugha/brassclaw-home-assistant-skill/main/skills/diagnostics/SKILL.md`
-   - **Config & Modbus**:
-     - **Skill Name**: `home-assistant-config-modbus`
-     - **HTTPS URL**: `https://raw.githubusercontent.com/chtugha/brassclaw-home-assistant-skill/main/skills/config-modbus/SKILL.md`
-5. Click **Install** for each skill.
+#### Monolithic Skill (All Features)
+- **Skill Name**: `home-assistant`
+- **HTTPS URL**: `https://raw.githubusercontent.com/chtugha/brassclaw-home-assistant-skill/main/skill.md`
 
-### 2. Configure via the UI
+#### Or Install Subskills Individually
 
-Our skill and subskills define their configuration requirements directly in their frontmatter. 
-Once installed, you can configure them directly in the **BrassClaw UI** under **Settings** > **Skills**:
-- **`HA_URL`**: The Home Assistant URL (e.g., `http://192.168.1.100:8123`)
-- **`HA_TOKEN`**: Your long-lived access token.
+**Control & Search**:
+- **Skill Name**: `home-assistant-control-search`
+- **HTTPS URL**: `https://raw.githubusercontent.com/chtugha/brassclaw-home-assistant-skill/main/skills/control-search/skill.md`
 
-### 3. Auto-Install and Register the MCP Server
+**Diagnostics**:
+- **Skill Name**: `home-assistant-diagnostics`
+- **HTTPS URL**: `https://raw.githubusercontent.com/chtugha/brassclaw-home-assistant-skill/main/skills/diagnostics/skill.md`
 
-Once the skill is installed and configured, the BrassClaw agent automatically knows how to build, deploy, and register the compiled Rust MCP server binary itself.
+**Config & Modbus**:
+- **Skill Name**: `home-assistant-config-modbus`
+- **HTTPS URL**: `https://raw.githubusercontent.com/chtugha/brassclaw-home-assistant-skill/main/skills/config-modbus/skill.md`
 
-1. Go to the **Chat** tab in your BrassClaw UI.
-2. Ask the agent to configure Home Assistant. For example:
-   ```
-   Set up Home Assistant MCP server
-   ```
-3. The agent will automatically:
-   - Clone this repository into a temporary directory.
-   - Compile the Rust `mcp-server` binary using Cargo.
-   - Deploy the compiled binary to `~/.brassclaw/mcp-server`.
-   - Register the `homeassistant` stdio-based MCP server into BrassClaw with the provided URL and Token env vars from the UI.
-   - Clean up temporary files.
-4. Once completed, the agent will confirm that the server is active. You can verify it under **Settings** > **MCP** in the UI!
+5. Click **Install**
+
+### 2. Configure Credentials
+
+After installation, configure the skill in **Settings** > **Skills**:
+
+- **`ha_url`**: Your Home Assistant URL (e.g., `http://192.168.1.100:8123`)
+- **`ha_token`**: Long-lived access token from Home Assistant
+  - Create at: Profile → Security → Long-Lived Access Tokens
+
+Credentials are automatically injected into HTTP requests by BrassClaw's credential system.
 
 ---
 
-## 🛠️ Available MCP Tools
+## 🛠️ Available Operations
 
-Once installed, your agent gains access to the following 5 tools:
+### Control & Search
+- Search for entities by name, domain, or area
+- Turn devices on/off
+- Toggle switches and lights
+- Set brightness, temperature, and other values
+- Check device status and states
 
-1. **`homeassistant_ha_search_entities(query, domain=None)`**  
-   Search Home Assistant entities, sensors, or devices by name, type, area, or status.
-2. **`homeassistant_ha_control(entity_id, action, value=None)`**  
-   Perform control actions (e.g. `turn_on`, `turn_off`, `toggle`, `set_value` for dimming or temperature).
-3. **`homeassistant_ha_get_diagnostics()`**  
-   Check system health, configuration validity, software updates, and recent system logs/alerts.
-4. **`homeassistant_ha_edit_config(action, file=None, old_string=None, new_string=None, offset=None, limit=None)`**  
-   Safely read or patch configuration files (like `configuration.yaml`) using a token-efficient pattern.
-5. **`homeassistant_ha_probe_modbus(register_type, address, host=None, port=None, unit_id=None, count=None)`**  
-   Directly probe Modbus TCP registers or coils for advanced integrations.
+### Diagnostics
+- Check system health and configuration
+- Find pending software updates
+- View recent error logs
+- Monitor integration status
+- Check for unavailable entities
 
----
-
-## 💬 Example Natural Language Commands
-
-Once everything is configured, you can talk to BrassClaw naturally:
-
-* **Devices**: "Turn on the kitchen overhead lights." or "Dim the living room to 40%."
-* **Climate**: "What is the temperature in the bedroom?" or "Set the thermostat to 21 degrees."
-* **System**: "Are there any software updates available for my Home Assistant?" or "Check my configuration for errors."
-* **Modbus / Advanced**: "Probe holding register 100 on Modbus."
+### Config & Modbus
+- Validate configuration files
+- Edit configuration.yaml (requires SSH)
+- Probe Modbus TCP registers
+- Read/write Modbus coils and holding registers
 
 ---
 
-## ⚙️ Requirements & Technical Details
+## 💬 Example Commands
 
-* **Rust Runtime**: The host running BrassClaw must have Rust installed so the agent can compile the high-performance MCP server binary from source on first setup.
-* **Network Permissions**: Ensure `HTTP_ALLOW_LOCALHOST=true` is set in the BrassClaw daemon's environment so that local Home Assistant private IPs can be reached.
+Once configured, talk to BrassClaw naturally:
+
+**Device Control**:
+- "Turn on the kitchen lights"
+- "Dim the living room to 40%"
+- "Set the bedroom thermostat to 21 degrees"
+- "Toggle the garage door"
+
+**Status Checks**:
+- "What's the temperature in the bedroom?"
+- "Is the front door locked?"
+- "Show me all unavailable devices"
+
+**System Management**:
+- "Check for Home Assistant updates"
+- "Show me recent errors"
+- "What's the system health status?"
+
+**Advanced**:
+- "Probe Modbus register 100"
+- "Add a new sensor to my configuration"
+
+---
+
+## 🔧 How It Works
+
+This skill uses BrassClaw's native capabilities:
+
+1. **HTTP Tool**: Makes REST API calls to Home Assistant
+2. **Credential Injection**: Automatically adds authentication headers
+3. **Shell Tool**: For SSH access (config editing, Modbus probing)
+
+No external MCP servers, no compilation, no dependencies. Just install and configure.
+
+---
+
+## 📋 Requirements
+
+- **BrassClaw**: Version 2.0+ with native HTTP tool support
+- **Home Assistant**: Any recent version with REST API enabled
+- **Network Access**: BrassClaw must be able to reach your Home Assistant instance
+- **SSH Access** (optional): Required for configuration editing and Modbus operations
+
+---
+
+## 🔒 Security Notes
+
+- Store your `ha_token` securely in BrassClaw's credential system
+- Use HTTPS for Home Assistant if possible
+- Limit token permissions to necessary scopes
+- For SSH operations, use key-based authentication
+- Be cautious with Modbus write operations
+
+---
+
+## 🐛 Troubleshooting
+
+**Skill not activating?**
+- Check that keywords match your request
+- Verify credentials are configured correctly
+- Ensure Home Assistant is reachable from BrassClaw
+
+**API errors?**
+- Verify your `ha_url` is correct (include port if needed)
+- Check that your `ha_token` is valid and not expired
+- Ensure Home Assistant REST API is enabled
+
+**Configuration editing not working?**
+- SSH access is required for config file editing
+- Alternatively, use the File Editor add-on
+- Check file permissions on Home Assistant host
+
+---
+
+## 📚 API Reference
+
+This skill uses the [Home Assistant REST API](https://developers.home-assistant.io/docs/api/rest/):
+
+- `/api/states` - Get all entity states
+- `/api/states/{entity_id}` - Get specific entity
+- `/api/services/{domain}/{service}` - Call a service
+- `/api/config` - Get system configuration
+- `/api/error/all` - Get error logs
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Test your changes thoroughly
+4. Submit a pull request
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT OR Apache-2.0 License.
+MIT OR Apache-2.0
+
+---
+
+## 🔗 Links
+
+- [BrassClaw](https://github.com/chtugha/brassclaw)
+- [Home Assistant](https://www.home-assistant.io/)
+- [Home Assistant REST API Docs](https://developers.home-assistant.io/docs/api/rest/)
